@@ -11,7 +11,7 @@ public class StarSystemGenerator : MonoBehaviour
     public int asteroidFieldCount = 3;
     public int asteroidsPerField = 16;
     public int stationaryDysonSatelliteCount = 2;
-    public int dynamicDysonSatelliteCount = 6;
+    public int dynamicDysonSatelliteCount = 300;
     public float celestialScaleMultiplier = 10f;
     public Transform generatedRoot;
 
@@ -199,8 +199,8 @@ public class StarSystemGenerator : MonoBehaviour
         int stationaryCount,
         int dynamicCount)
     {
-        float stationaryOrbitRadius = scaledSystemRadius * 0.17f;
-        float dynamicOrbitRadius = scaledSystemRadius * 0.14f;
+        float stationaryOrbitRadius = scaledSystemRadius * 0.06f;
+        float dynamicOrbitRadius = scaledSystemRadius * 0.05f;
 
         for (int i = 0; i < stationaryCount; i++)
         {
@@ -219,7 +219,7 @@ public class StarSystemGenerator : MonoBehaviour
 
         for (int i = 0; i < dynamicCount; i++)
         {
-            float angle = (((float)i / Mathf.Max(1, dynamicCount)) * 360f) + RandomRange(random, -12f, 12f);
+            float angle = ((float)i / Mathf.Max(1, dynamicCount) * 360f) + RandomRange(random, -12f, 12f);
             float speed = RandomRange(random, 5f, 10f) * (i % 2 == 0 ? 1f : -1f);
             layout.dysonSatellites.Add(new DysonSatelliteDefinition
             {
@@ -273,7 +273,7 @@ public class StarSystemGenerator : MonoBehaviour
         GameObject instance = new GameObject(definition.name);
         instance.transform.SetParent(generatedRoot);
         instance.transform.position = definition.position;
-        instance.transform.localScale = Vector3.one * 6f;
+        instance.transform.localScale = Vector3.one * 1f;
 
         SpriteRenderer spriteRenderer = instance.AddComponent<SpriteRenderer>();
         spriteRenderer.sprite = PlaceholderSprites.DysonSatellite;
@@ -292,7 +292,7 @@ public class StarSystemGenerator : MonoBehaviour
         discovery.passiveRevealRadius = 18f;
 
         MapMarker marker = instance.AddComponent<MapMarker>();
-        marker.markerType = MapMarkerType.DysonSatellite;
+        //marker.markerType = MapMarkerType.DysonSatellite;
         marker.markerColor = spriteRenderer.color;
         marker.iconScale = 0.8f;
         marker.requireDiscovery = true;
