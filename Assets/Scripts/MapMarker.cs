@@ -5,7 +5,8 @@ public enum MapMarkerType
     Player,
     Star,
     Planet,
-    Asteroid
+    Asteroid,
+    DysonSatellite
 }
 
 public class MapMarker : MonoBehaviour

@@ -7,6 +7,7 @@ public static class PlaceholderSprites
     private static Sprite planet;
     private static Sprite star;
     private static Sprite asteroid;
+    private static Sprite dysonSatellite;
 
     public static Sprite Pixel
     {
@@ -238,6 +239,64 @@ public static class PlaceholderSprites
             }
 
             return asteroid;
+        }
+    }
+
+    public static Sprite DysonSatellite
+    {
+        get
+        {
+            if (dysonSatellite == null)
+            {
+                const int size = 96;
+                Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+                texture.name = "Runtime Placeholder Dyson Satellite";
+                texture.filterMode = FilterMode.Point;
+                texture.wrapMode = TextureWrapMode.Clamp;
+
+                for (int y = 0; y < size; y++)
+                {
+                    for (int x = 0; x < size; x++)
+                    {
+                        texture.SetPixel(x, y, Color.clear);
+                    }
+                }
+
+                Color white = Color.white;
+                Color grey = new Color(0.62f, 0.68f, 0.72f, 1f);
+                Color dark = new Color(0.22f, 0.26f, 0.3f, 1f);
+
+                FillRect(texture, 40, 40, 16, 16, white);
+                FillRect(texture, 44, 34, 8, 28, grey);
+                FillRect(texture, 18, 38, 20, 20, grey);
+                FillRect(texture, 58, 38, 20, 20, grey);
+                FillRect(texture, 12, 42, 6, 12, dark);
+                FillRect(texture, 78, 42, 6, 12, dark);
+                FillRect(texture, 28, 34, 8, 4, white);
+                FillRect(texture, 60, 34, 8, 4, white);
+
+                texture.Apply();
+
+                dysonSatellite = Sprite.Create(
+                    texture,
+                    new Rect(0f, 0f, size, size),
+                    new Vector2(0.5f, 0.5f),
+                    size
+                );
+            }
+
+            return dysonSatellite;
+        }
+    }
+
+    private static void FillRect(Texture2D texture, int x, int y, int width, int height, Color color)
+    {
+        for (int iy = y; iy < y + height; iy++)
+        {
+            for (int ix = x; ix < x + width; ix++)
+            {
+                texture.SetPixel(ix, iy, color);
+            }
         }
     }
 }

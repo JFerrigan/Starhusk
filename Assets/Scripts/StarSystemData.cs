@@ -17,6 +17,12 @@ public enum CelestialBodyType
     Asteroid
 }
 
+public enum DysonSatelliteMode
+{
+    Stationary,
+    Dynamic
+}
+
 public struct CelestialBodyDefinition
 {
     public string name;
@@ -28,10 +34,22 @@ public struct CelestialBodyDefinition
     public bool discoveredAtStart;
 }
 
+public struct DysonSatelliteDefinition
+{
+    public string name;
+    public DysonSatelliteMode mode;
+    public Vector2 position;
+    public float orbitRadius;
+    public float startAngleDegrees;
+    public float orbitSpeedDegrees;
+    public bool discoveredAtStart;
+}
+
 public class StarSystemLayout
 {
     public int seed;
     public StarType starType;
     public List<CelestialBodyDefinition> planets = new List<CelestialBodyDefinition>();
     public List<CelestialBodyDefinition> asteroids = new List<CelestialBodyDefinition>();
+    public List<DysonSatelliteDefinition> dysonSatellites = new List<DysonSatelliteDefinition>();
 }

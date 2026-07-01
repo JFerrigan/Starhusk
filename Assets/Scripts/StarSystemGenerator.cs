@@ -10,6 +10,8 @@ public class StarSystemGenerator : MonoBehaviour
     public int maxPlanets = 10;
     public int asteroidFieldCount = 3;
     public int asteroidsPerField = 16;
+    public int stationaryDysonSatelliteCount = 2;
+    public int dynamicDysonSatelliteCount = 6;
     public float celestialScaleMultiplier = 10f;
     public Transform generatedRoot;
 
@@ -36,7 +38,7 @@ public class StarSystemGenerator : MonoBehaviour
         }
 
         ClearGeneratedRoot();
-        CurrentLayout = GenerateLayout(seed, systemRadius, minPlanets, maxPlanets, asteroidFieldCount, asteroidsPerField, worldScaleMultiplier);
+        CurrentLayout = GenerateLayout(seed, systemRadius, minPlanets, maxPlanets, asteroidFieldCount, asteroidsPerField, worldScaleMultiplier, stationaryDysonSatelliteCount, dynamicDysonSatelliteCount);
         BuildLayout(CurrentLayout);
     }
 
@@ -47,7 +49,9 @@ public class StarSystemGenerator : MonoBehaviour
         int maxPlanets,
         int asteroidFieldCount,
         int asteroidsPerField,
-        float worldScaleMultiplier = 1f)
+        float worldScaleMultiplier = 1f,
+        int stationaryDysonSatelliteCount = 2,
+        int dynamicDysonSatelliteCount = 6)
     {
         System.Random random = new System.Random(seed);
         StarSystemLayout layout = new StarSystemLayout
@@ -102,6 +106,8 @@ public class StarSystemGenerator : MonoBehaviour
             });
         }
 
+        GenerateDysonSatellites(layout, random, scaledSystemRadius, stationaryDysonSatelliteCount, dynamicDysonSatelliteCount);
+
         return layout;
     }
 
@@ -136,6 +142,8 @@ public class StarSystemGenerator : MonoBehaviour
             deposit.mineAmountPerInteraction = 12;
             asteroid.AddComponent<MineableAsteroid>();
         }
+
+        BuildDysonSatellites(layout);
     }
 
     private GameObject BuildSpriteObject(string objectName, Vector2 position, float visualRadius, Color color, bool discoveredAtStart, MapMarkerType markerType, float baseRadius, bool colliderIsTrigger = false)
@@ -173,6 +181,8 @@ public class StarSystemGenerator : MonoBehaviour
         {
             case MapMarkerType.Asteroid:
                 return PlaceholderSprites.Asteroid;
+            case MapMarkerType.DysonSatellite:
+                return PlaceholderSprites.DysonSatellite;
             case MapMarkerType.Planet:
                 return PlaceholderSprites.Planet;
             case MapMarkerType.Star:
@@ -180,6 +190,129 @@ public class StarSystemGenerator : MonoBehaviour
             default:
                 return PlaceholderSprites.Circle;
         }
+    }
+
+    private static void GenerateDysonSatellites(
+        StarSystemLayout layout,
+        System.Random random,
+        float scaledSystemRadius,
+        int stationaryCount,
+        int dynamicCount)
+    {
+        float stationaryOrbitRadius = scaledSystemRadius * 0.17f;
+        float dynamicOrbitRadius = scaledSystemRadius * 0.14f;
+
+        for (int i = 0; i < stationaryCount; i++)
+        {
+            float angle = ((float)i / Mathf.Max(1, stationaryCount)) * 360f;
+            layout.dysonSatellites.Add(new DysonSatelliteDefinition
+            {
+                name = "Dyson Receiver " + i,
+                mode = DysonSatelliteMode.Stationary,
+                position = Direction(angle * Mathf.Deg2Rad) * stationaryOrbitRadius,
+                orbitRadius = stationaryOrbitRadius,
+                startAngleDegrees = angle,
+                orbitSpeedDegrees = 0f,
+                discoveredAtStart = false
+            });
+        }
+
+        for (int i = 0; i < dynamicCount; i++)
+        {
+            float angle = (((float)i / Mathf.Max(1, dynamicCount)) * 360f) + RandomRange(random, -12f, 12f);
+            float speed = RandomRange(random, 5f, 10f) * (i % 2 == 0 ? 1f : -1f);
+            layout.dysonSatellites.Add(new DysonSatelliteDefinition
+            {
+                name = "Dyson Reflector " + i,
+                mode = DysonSatelliteMode.Dynamic,
+                position = Direction(angle * Mathf.Deg2Rad) * dynamicOrbitRadius,
+                orbitRadius = dynamicOrbitRadius,
+                startAngleDegrees = angle,
+                orbitSpeedDegrees = speed,
+                discoveredAtStart = false
+            });
+        }
+    }
+
+    private void BuildDysonSatellites(StarSystemLayout layout)
+    {
+        DysonSatellite[] dynamicSatellites = new DysonSatellite[CountSatellites(layout, DysonSatelliteMode.Dynamic)];
+        DysonSatellite[] stationarySatellites = new DysonSatellite[CountSatellites(layout, DysonSatelliteMode.Stationary)];
+        int dynamicIndex = 0;
+        int stationaryIndex = 0;
+
+        for (int i = 0; i < layout.dysonSatellites.Count; i++)
+        {
+            DysonSatelliteDefinition definition = layout.dysonSatellites[i];
+            GameObject satelliteObject = BuildDysonSatelliteObject(definition);
+            DysonSatellite satellite = satelliteObject.GetComponent<DysonSatellite>();
+
+            if (definition.mode == DysonSatelliteMode.Dynamic)
+            {
+                dynamicSatellites[dynamicIndex] = satellite;
+                dynamicIndex++;
+            }
+            else
+            {
+                stationarySatellites[stationaryIndex] = satellite;
+                stationaryIndex++;
+            }
+        }
+
+        if (dynamicSatellites.Length > 0 && stationarySatellites.Length > 0)
+        {
+            GameObject networkObject = new GameObject("DysonBeamNetwork");
+            networkObject.transform.SetParent(generatedRoot);
+            DysonBeamNetwork network = networkObject.AddComponent<DysonBeamNetwork>();
+            network.Initialize(dynamicSatellites, stationarySatellites);
+        }
+    }
+
+    private GameObject BuildDysonSatelliteObject(DysonSatelliteDefinition definition)
+    {
+        GameObject instance = new GameObject(definition.name);
+        instance.transform.SetParent(generatedRoot);
+        instance.transform.position = definition.position;
+        instance.transform.localScale = Vector3.one * 6f;
+
+        SpriteRenderer spriteRenderer = instance.AddComponent<SpriteRenderer>();
+        spriteRenderer.sprite = PlaceholderSprites.DysonSatellite;
+        spriteRenderer.color = definition.mode == DysonSatelliteMode.Dynamic
+            ? new Color(0.72f, 0.95f, 1f)
+            : new Color(1f, 0.86f, 0.34f);
+
+        DysonSatellite satellite = instance.AddComponent<DysonSatellite>();
+        satellite.mode = definition.mode;
+        satellite.orbitRadius = definition.orbitRadius;
+        satellite.startAngleDegrees = definition.startAngleDegrees;
+        satellite.orbitSpeedDegrees = definition.orbitSpeedDegrees;
+
+        DiscoveryState discovery = instance.AddComponent<DiscoveryState>();
+        discovery.SetDiscovered(definition.discoveredAtStart);
+        discovery.passiveRevealRadius = 18f;
+
+        MapMarker marker = instance.AddComponent<MapMarker>();
+        marker.markerType = MapMarkerType.DysonSatellite;
+        marker.markerColor = spriteRenderer.color;
+        marker.iconScale = 0.8f;
+        marker.requireDiscovery = true;
+        marker.discoveryState = discovery;
+
+        return instance;
+    }
+
+    private static int CountSatellites(StarSystemLayout layout, DysonSatelliteMode mode)
+    {
+        int count = 0;
+        for (int i = 0; i < layout.dysonSatellites.Count; i++)
+        {
+            if (layout.dysonSatellites[i].mode == mode)
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     public static float ColliderRadiusForMarker(MapMarkerType markerType)

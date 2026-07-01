@@ -12,6 +12,7 @@ public class StarSystemGeneratorTests
         Assert.AreEqual(first.starType, second.starType);
         Assert.AreEqual(first.planets.Count, second.planets.Count);
         Assert.AreEqual(first.asteroids.Count, second.asteroids.Count);
+        Assert.AreEqual(first.dysonSatellites.Count, second.dysonSatellites.Count);
 
         for (int i = 0; i < first.planets.Count; i++)
         {
@@ -23,6 +24,12 @@ public class StarSystemGeneratorTests
         {
             Assert.That(Vector2.Distance(first.asteroids[i].position, second.asteroids[i].position), Is.LessThan(0.001f));
             Assert.AreEqual(first.asteroids[i].resourceAmount, second.asteroids[i].resourceAmount);
+        }
+
+        for (int i = 0; i < first.dysonSatellites.Count; i++)
+        {
+            Assert.That(Vector2.Distance(first.dysonSatellites[i].position, second.dysonSatellites[i].position), Is.LessThan(0.001f));
+            Assert.AreEqual(first.dysonSatellites[i].mode, second.dysonSatellites[i].mode);
         }
     }
 
@@ -120,5 +127,57 @@ public class StarSystemGeneratorTests
         {
             Object.DestroyImmediate(asteroidObject);
         }
+    }
+
+    [Test]
+    public void DefaultLayoutContainsDysonSatelliteReceiversAndReflectors()
+    {
+        StarSystemLayout layout = StarSystemGenerator.GenerateLayout(1107, 80f, 3, 5, 3, 16);
+        int stationaryCount = 0;
+        int dynamicCount = 0;
+
+        for (int i = 0; i < layout.dysonSatellites.Count; i++)
+        {
+            if (layout.dysonSatellites[i].mode == DysonSatelliteMode.Stationary)
+            {
+                stationaryCount++;
+            }
+            else if (layout.dysonSatellites[i].mode == DysonSatelliteMode.Dynamic)
+            {
+                dynamicCount++;
+            }
+        }
+
+        Assert.That(stationaryCount, Is.EqualTo(2));
+        Assert.That(dynamicCount, Is.EqualTo(6));
+    }
+
+    [Test]
+    public void DynamicSatelliteOrbitPositionChangesOverTime()
+    {
+        Vector2 first = DysonSatellite.OrbitPositionAtTime(Vector2.zero, 20f, 0f, 10f, 0f);
+        Vector2 second = DysonSatellite.OrbitPositionAtTime(Vector2.zero, 20f, 0f, 10f, 3f);
+
+        Assert.That(Vector2.Distance(first, second), Is.GreaterThan(0.1f));
+    }
+
+    [Test]
+    public void StationarySatellitePositionDoesNotChangeWithZeroOrbitSpeed()
+    {
+        Vector2 first = DysonSatellite.OrbitPositionAtTime(Vector2.zero, 20f, 45f, 0f, 0f);
+        Vector2 second = DysonSatellite.OrbitPositionAtTime(Vector2.zero, 20f, 45f, 0f, 30f);
+
+        Assert.That(Vector2.Distance(first, second), Is.LessThan(0.001f));
+    }
+
+    [Test]
+    public void DysonBeamAlignmentUsesAngularTolerance()
+    {
+        Vector2 dynamicPosition = new Vector2(10f, 0f);
+        Vector2 alignedStation = new Vector2(20f, 1f);
+        Vector2 unalignedStation = new Vector2(0f, 20f);
+
+        Assert.IsTrue(DysonBeamNetwork.AreAligned(Vector2.zero, dynamicPosition, alignedStation, 8f));
+        Assert.IsFalse(DysonBeamNetwork.AreAligned(Vector2.zero, dynamicPosition, unalignedStation, 8f));
     }
 }

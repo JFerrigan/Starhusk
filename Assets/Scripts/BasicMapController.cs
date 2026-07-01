@@ -227,6 +227,8 @@ public class BasicMapController : MonoBehaviour
                 return 12f;
             case MapMarkerType.Planet:
                 return 7f;
+            case MapMarkerType.DysonSatellite:
+                return 5f;
             default:
                 return 4f;
         }
