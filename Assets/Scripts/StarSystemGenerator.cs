@@ -138,7 +138,7 @@ public class StarSystemGenerator : MonoBehaviour
         }
     }
 
-    private GameObject BuildSpriteObject(string objectName, Vector2 position, float visualRadius, Color color, bool discoveredAtStart, MapMarkerType markerType, float baseRadius, bool colliderIsTrigger = true)
+    private GameObject BuildSpriteObject(string objectName, Vector2 position, float visualRadius, Color color, bool discoveredAtStart, MapMarkerType markerType, float baseRadius, bool colliderIsTrigger = false)
     {
         GameObject instance = new GameObject(objectName);
         instance.transform.SetParent(generatedRoot);

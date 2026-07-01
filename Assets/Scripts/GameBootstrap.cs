@@ -86,6 +86,11 @@ public class GameBootstrap : MonoBehaviour
             inventory.gameObject.AddComponent<PlayerMovement>();
         }
 
+        if (inventory.GetComponent<PlayerRadarPing>() == null)
+        {
+            inventory.gameObject.AddComponent<PlayerRadarPing>();
+        }
+
         if (inventory.GetComponent<MapMarker>() == null)
         {
             MapMarker marker = inventory.gameObject.AddComponent<MapMarker>();

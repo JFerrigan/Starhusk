@@ -4,6 +4,7 @@ using UnityEngine.InputSystem;
 public class MineableAsteroid : MonoBehaviour
 {
     public int oreAmount = 5;
+    public float interactionRadius = 0.82f;
 
     private bool playerNearby = false;
     private ResourceInventory nearbyInventory;
@@ -21,6 +22,8 @@ public class MineableAsteroid : MonoBehaviour
             deposit.remainingAmount = deposit.maxAmount;
             deposit.mineAmountPerInteraction = Mathf.Max(oreAmount, 1);
         }
+
+        EnsureInteractionTrigger();
     }
 
     private void Update()
@@ -66,5 +69,22 @@ public class MineableAsteroid : MonoBehaviour
             playerNearby = false;
             nearbyInventory = null;
         }
+    }
+
+    private void EnsureInteractionTrigger()
+    {
+        CircleCollider2D[] colliders = GetComponents<CircleCollider2D>();
+        for (int i = 0; i < colliders.Length; i++)
+        {
+            if (colliders[i].isTrigger)
+            {
+                colliders[i].radius = Mathf.Max(colliders[i].radius, interactionRadius);
+                return;
+            }
+        }
+
+        CircleCollider2D trigger = gameObject.AddComponent<CircleCollider2D>();
+        trigger.isTrigger = true;
+        trigger.radius = interactionRadius;
     }
 }

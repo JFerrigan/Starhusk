@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -14,6 +15,7 @@ public class BasicMapController : MonoBehaviour
     private bool fullMapOpen;
     private StarSystemGenerator generator;
     private ResourceInventory playerInventory;
+    private PlayerRadarPing radarPing;
     private Texture2D pixel;
     private GUIStyle labelStyle;
 
@@ -43,6 +45,11 @@ public class BasicMapController : MonoBehaviour
         if (playerInventory == null)
         {
             playerInventory = FindFirstObjectByType<ResourceInventory>();
+        }
+
+        if (radarPing == null && playerInventory != null)
+        {
+            radarPing = playerInventory.GetComponent<PlayerRadarPing>();
         }
     }
 
@@ -111,6 +118,7 @@ public class BasicMapController : MonoBehaviour
 
         if (playerMarker != null)
         {
+            DrawRadarOverlay(rect, playerMarker);
             DrawMarker(playerMarker, rect, includeLabels);
         }
 
@@ -121,6 +129,59 @@ public class BasicMapController : MonoBehaviour
                 "System Map  Seed " + generator.seed + "\nPress M to close",
                 labelStyle
             );
+        }
+    }
+
+    private void DrawRadarOverlay(Rect rect, MapMarker playerMarker)
+    {
+        if (radarPing == null || playerMarker == null)
+        {
+            return;
+        }
+
+        Vector2 playerPosition = WorldToMapPosition(playerMarker.transform.position, rect, generator.EffectiveSystemRadius);
+        float progress = radarPing.PulseProgress;
+        if (progress < 1f)
+        {
+            float easedProgress = 1f - ((1f - progress) * (1f - progress));
+            float mapRadius = (radarPing.pingRange / Mathf.Max(1f, generator.EffectiveSystemRadius)) * (Mathf.Min(rect.width, rect.height) * 0.5f);
+            Color pulseColor = new Color(0.22f, 0.95f, 1f, Mathf.Lerp(0.85f, 0.05f, progress));
+            DrawCircle(playerPosition, mapRadius * easedProgress, pulseColor, 80);
+        }
+
+        IReadOnlyList<RadarContact> contacts = radarPing.ActiveContacts;
+        for (int i = 0; i < contacts.Count; i++)
+        {
+            RadarContact contact = contacts[i];
+            if (!PlayerRadarPing.IsContactActive(Time.time, contact.expiresAt))
+            {
+                continue;
+            }
+
+            DrawRadarContact(contact, rect);
+        }
+    }
+
+    private void DrawRadarContact(RadarContact contact, Rect rect)
+    {
+        Vector2 position = WorldToMapPosition(contact.worldPosition, rect, generator.EffectiveSystemRadius);
+        float size = Mathf.Max(5f, MarkerSize(contact.markerType) * 0.85f);
+        Color color = RadarContactColor(contact);
+
+        DrawRect(new Rect(position.x - (size * 0.5f), position.y - (size * 0.5f), size, size), color);
+        DrawRectOutline(new Rect(position.x - (size * 0.8f), position.y - (size * 0.8f), size * 1.6f, size * 1.6f), new Color(color.r, color.g, color.b, 0.45f), 1f);
+    }
+
+    private Color RadarContactColor(RadarContact contact)
+    {
+        switch (contact.markerType)
+        {
+            case MapMarkerType.Star:
+                return new Color(1f, 0.76f, 0.22f, 0.95f);
+            case MapMarkerType.Planet:
+                return new Color(0.28f, 0.95f, 1f, 0.95f);
+            default:
+                return new Color(Mathf.Max(0.48f, contact.color.r), Mathf.Max(0.82f, contact.color.g), Mathf.Max(0.9f, contact.color.b), 0.9f);
         }
     }
 

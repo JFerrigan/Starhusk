@@ -90,4 +90,35 @@ public class StarSystemGeneratorTests
         Assert.That(StarSystemGenerator.ColliderRadiusForMarker(MapMarkerType.Star), Is.EqualTo(0.47f).Within(0.001f));
         Assert.That(StarSystemGenerator.ColliderRadiusForMarker(MapMarkerType.Asteroid), Is.EqualTo(0.5f).Within(0.001f));
     }
+
+    [Test]
+    public void MineableAsteroidAddsInteractionTriggerWithoutReplacingSolidCollider()
+    {
+        GameObject asteroidObject = new GameObject("Asteroid");
+
+        try
+        {
+            CircleCollider2D solidCollider = asteroidObject.AddComponent<CircleCollider2D>();
+            solidCollider.isTrigger = false;
+
+            asteroidObject.AddComponent<MineableAsteroid>();
+
+            CircleCollider2D[] colliders = asteroidObject.GetComponents<CircleCollider2D>();
+            bool hasSolidCollider = false;
+            bool hasTriggerCollider = false;
+
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                hasSolidCollider |= !colliders[i].isTrigger;
+                hasTriggerCollider |= colliders[i].isTrigger;
+            }
+
+            Assert.IsTrue(hasSolidCollider);
+            Assert.IsTrue(hasTriggerCollider);
+        }
+        finally
+        {
+            Object.DestroyImmediate(asteroidObject);
+        }
+    }
 }
