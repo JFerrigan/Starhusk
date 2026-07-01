@@ -3,6 +3,7 @@ using UnityEngine;
 public class FoundationHud : MonoBehaviour
 {
     private ResourceInventory inventory;
+    private PlayerMovement playerMovement;
     private PlayerScanner scanner;
     private StarSystemGenerator generator;
     private GUIStyle labelStyle;
@@ -28,6 +29,11 @@ public class FoundationHud : MonoBehaviour
             scanner = inventory.GetComponent<PlayerScanner>();
         }
 
+        if (playerMovement == null && inventory != null)
+        {
+            playerMovement = inventory.GetComponent<PlayerMovement>();
+        }
+
         if (generator == null)
         {
             generator = FindFirstObjectByType<StarSystemGenerator>();
@@ -43,15 +49,17 @@ public class FoundationHud : MonoBehaviour
 
         string scannerState = scanner == null || scanner.IsReady ? "Ready" : "Charging";
         int seed = generator == null ? 0 : generator.seed;
+        float speed = playerMovement == null ? 0f : playerMovement.Speed;
 
         GUI.Label(
-            new Rect(12f, 12f, 560f, 80f),
+            new Rect(12f, 12f, 560f, 100f),
             "Seed " + seed +
             "\nOre " + inventory.GetAmount(ResourceType.Ore) +
             "  Ice " + inventory.GetAmount(ResourceType.Ice) +
             "  Silicate " + inventory.GetAmount(ResourceType.Silicate) +
             "  Copper " + inventory.GetAmount(ResourceType.Copper) +
-            "\nScanner " + scannerState,
+            "\nScanner " + scannerState +
+            "  Speed " + speed.ToString("0.0"),
             labelStyle
         );
     }

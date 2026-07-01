@@ -97,9 +97,21 @@ public class BasicMapController : MonoBehaviour
         DrawCircle(rect.center, radius, boundaryColor, 96);
 
         MapMarker[] markers = FindObjectsByType<MapMarker>(FindObjectsSortMode.None);
+        MapMarker playerMarker = null;
         for (int i = 0; i < markers.Length; i++)
         {
+            if (markers[i] != null && markers[i].markerType == MapMarkerType.Player)
+            {
+                playerMarker = markers[i];
+                continue;
+            }
+
             DrawMarker(markers[i], rect, includeLabels);
+        }
+
+        if (playerMarker != null)
+        {
+            DrawMarker(playerMarker, rect, includeLabels);
         }
 
         if (includeLabels)
@@ -125,7 +137,7 @@ public class BasicMapController : MonoBehaviour
             return;
         }
 
-        Vector2 position = WorldToMapPosition(marker.transform.position, rect, generator.systemRadius);
+        Vector2 position = WorldToMapPosition(marker.transform.position, rect, generator.EffectiveSystemRadius);
         float size = MarkerSize(marker.markerType) * Mathf.Max(0.5f, marker.iconScale) * (includeLabels ? 1.25f : 1f);
         Color color = visible ? marker.markerColor : undiscoveredColor;
 

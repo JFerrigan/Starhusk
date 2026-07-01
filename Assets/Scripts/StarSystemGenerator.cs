@@ -5,6 +5,7 @@ public class StarSystemGenerator : MonoBehaviour
 {
     public int seed = 1107;
     public float systemRadius = 80f;
+    public float worldScaleMultiplier = 10f;
     public int minPlanets = 3;
     public int maxPlanets = 5;
     public int asteroidFieldCount = 3;
@@ -13,6 +14,7 @@ public class StarSystemGenerator : MonoBehaviour
     public Transform generatedRoot;
 
     public StarSystemLayout CurrentLayout { get; private set; }
+    public float EffectiveSystemRadius => systemRadius * worldScaleMultiplier;
 
     private void Start()
     {
@@ -34,7 +36,7 @@ public class StarSystemGenerator : MonoBehaviour
         }
 
         ClearGeneratedRoot();
-        CurrentLayout = GenerateLayout(seed, systemRadius, minPlanets, maxPlanets, asteroidFieldCount, asteroidsPerField);
+        CurrentLayout = GenerateLayout(seed, systemRadius, minPlanets, maxPlanets, asteroidFieldCount, asteroidsPerField, worldScaleMultiplier);
         BuildLayout(CurrentLayout);
     }
 
@@ -44,7 +46,8 @@ public class StarSystemGenerator : MonoBehaviour
         int minPlanets,
         int maxPlanets,
         int asteroidFieldCount,
-        int asteroidsPerField)
+        int asteroidsPerField,
+        float worldScaleMultiplier = 1f)
     {
         System.Random random = new System.Random(seed);
         StarSystemLayout layout = new StarSystemLayout
@@ -54,7 +57,8 @@ public class StarSystemGenerator : MonoBehaviour
         };
 
         int planetCount = random.Next(minPlanets, maxPlanets + 1);
-        float orbitStep = systemRadius / (planetCount + 2);
+        float scaledSystemRadius = systemRadius * worldScaleMultiplier;
+        float orbitStep = scaledSystemRadius / (planetCount + 2);
 
         for (int i = 0; i < planetCount; i++)
         {
@@ -77,7 +81,7 @@ public class StarSystemGenerator : MonoBehaviour
 
         for (int field = 0; field < asteroidFieldCount; field++)
         {
-            float fieldRadius = RandomRange(random, systemRadius * 0.25f, systemRadius * 0.9f);
+            float fieldRadius = RandomRange(random, scaledSystemRadius * 0.25f, scaledSystemRadius * 0.9f);
             float fieldAngle = RandomRange(random, 0f, Mathf.PI * 2f);
             Vector2 fieldCenter = Direction(fieldAngle) * fieldRadius;
 

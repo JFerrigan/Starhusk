@@ -6,9 +6,8 @@ public class PlayerMovement : MonoBehaviour
     [Header("Movement")]
     public float thrustForce = 8f;
     public float rotationSpeed = 180f;
-    public float maxSpeed = 8f;
     public float reverseThrustMultiplier = 0.5f;
-    public float brakeDamping = 4f;
+    public float brakeDeceleration = 28f;
     public float rotationResponsiveness = 12f;
 
     private Rigidbody2D rb;
@@ -59,9 +58,9 @@ public class PlayerMovement : MonoBehaviour
         else if (Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed)
         {
             thrustInput = -reverseThrustMultiplier;
-            brakeInput = true;
         }
 
+        brakeInput = Keyboard.current.spaceKey.isPressed;
     }
 
     private void FixedUpdate()
@@ -87,13 +86,11 @@ public class PlayerMovement : MonoBehaviour
 
         if (brakeInput && rb.linearVelocity.sqrMagnitude > 0.01f)
         {
-            rb.linearVelocity = Vector2.Lerp(
+            rb.linearVelocity = Vector2.MoveTowards(
                 rb.linearVelocity,
                 Vector2.zero,
-                brakeDamping * Time.fixedDeltaTime
+                brakeDeceleration * Time.fixedDeltaTime
             );
         }
-
-        rb.linearVelocity = Vector2.ClampMagnitude(rb.linearVelocity, maxSpeed);
     }
 }

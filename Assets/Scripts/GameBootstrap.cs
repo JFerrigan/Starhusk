@@ -40,7 +40,7 @@ public class GameBootstrap : MonoBehaviour
 
             Rigidbody2D createdRb = playerObject.AddComponent<Rigidbody2D>();
             createdRb.gravityScale = 0f;
-            createdRb.linearDamping = 0.4f;
+            createdRb.linearDamping = 0f;
             createdRb.angularDamping = 2f;
 
             playerObject.AddComponent<BoxCollider2D>();
@@ -67,7 +67,7 @@ public class GameBootstrap : MonoBehaviour
         }
 
         rb.gravityScale = 0f;
-        rb.linearDamping = Mathf.Max(rb.linearDamping, 0.4f);
+        rb.linearDamping = 0f;
         rb.angularDamping = Mathf.Max(rb.angularDamping, 2f);
 
         if (playerObject.GetComponent<Collider2D>() == null)
@@ -134,8 +134,8 @@ public class GameBootstrap : MonoBehaviour
             follow = camera.gameObject.AddComponent<CameraFollow>();
         }
 
-        follow.smoothTime = Mathf.Min(follow.smoothTime, 0.08f);
-        follow.followSpeed = Mathf.Max(follow.followSpeed, 8f);
+        follow.followAcceleration = Mathf.Max(follow.followAcceleration, 55f);
+        follow.velocityDamping = Mathf.Max(follow.velocityDamping, 5f);
 
         if (follow.target == null)
         {
