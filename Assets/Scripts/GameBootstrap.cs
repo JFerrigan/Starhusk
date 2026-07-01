@@ -20,6 +20,7 @@ public class GameBootstrap : MonoBehaviour
         EnsurePlayer();
         EnsureGenerator();
         EnsureCamera();
+        EnsureSpaceBackground();
         EnsureMapController();
     }
 
@@ -144,6 +145,20 @@ public class GameBootstrap : MonoBehaviour
             {
                 follow.target = inventory.transform;
             }
+        }
+    }
+
+    private void EnsureSpaceBackground()
+    {
+        Camera camera = Camera.main;
+        if (camera == null)
+        {
+            return;
+        }
+
+        if (camera.GetComponent<ProceduralSpaceBackground>() == null)
+        {
+            camera.gameObject.AddComponent<ProceduralSpaceBackground>();
         }
     }
 

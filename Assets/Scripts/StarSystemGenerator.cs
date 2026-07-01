@@ -6,8 +6,8 @@ public class StarSystemGenerator : MonoBehaviour
     public int seed = 1107;
     public float systemRadius = 80f;
     public float worldScaleMultiplier = 10f;
-    public int minPlanets = 3;
-    public int maxPlanets = 5;
+    public int minPlanets = 10;
+    public int maxPlanets = 10;
     public int asteroidFieldCount = 3;
     public int asteroidsPerField = 16;
     public float celestialScaleMultiplier = 10f;
