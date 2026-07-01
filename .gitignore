@@ -1,0 +1,60 @@
+# Unity generated folders
+Library/
+Temp/
+Obj/
+Build/
+Builds/
+Logs/
+UserSettings/
+MemoryCaptures/
+Recordings/
+
+# Unity cache / local state
+*.csproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.opendb
+*.VC.db
+*.stackdump
+*.log
+sysinfo.txt
+
+# IDE/editor folders
+.vs/
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Unity build outputs
+*.apk
+*.aab
+*.app
+*.exe
+*.dll
+*.dmg
+*.ipa
+*.xcodeproj
+*.xcworkspace
+
+# Platform-specific artifacts
+*.pdb
+*.mdb
+*.obj
+*.so
+*.a
+*.lib
+
+# Unity package manager
+Packages/com.unity.package-manager-ui/
+
+# Misc generated backups
+*_BackUpThisFolder_ButDontShipItWithYourGame/
+*.tmp
