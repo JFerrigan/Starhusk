@@ -10,10 +10,12 @@ public class ProceduralSpaceBackground : MonoBehaviour
     public float starDensity = 0.0028f;
 
     [Header("Motion")]
-    public float nebulaParallax = 0.012f;
-    public float farStarParallax = 0.035f;
-    public float nearStarParallax = 0.075f;
-    public float speedStretch = 0.08f;
+    public float nebulaParallax = 0.03f;
+    public float farStarParallax = 0.08f;
+    public float nearStarParallax = 0.16f;
+    public float speedStretch = 0.06f;
+    public float textureScrollWorldScale = 90f;
+    public float layerMotionMultiplier = 0.08f;
 
     private Camera attachedCamera;
     private BackgroundLayer nebulaLayer;
@@ -28,6 +30,7 @@ public class ProceduralSpaceBackground : MonoBehaviour
         public MeshRenderer renderer;
         public Material material;
         public float parallax;
+        public float localDepth;
         public Vector2 offset;
     }
 
@@ -100,6 +103,7 @@ public class ProceduralSpaceBackground : MonoBehaviour
             renderer = renderer,
             material = material,
             parallax = parallax,
+            localDepth = localDepth,
             offset = Vector2.zero
         };
     }
@@ -152,8 +156,16 @@ public class ProceduralSpaceBackground : MonoBehaviour
 
         Vector2 cameraPosition = transform.position;
         Vector2 velocityBias = travelVelocity * speedStretch * layer.parallax;
-        layer.offset = -(cameraPosition * layer.parallax) - velocityBias;
+        layer.offset = ((cameraPosition * layer.parallax) + velocityBias) / Mathf.Max(1f, textureScrollWorldScale);
         ApplyMaterialOffset(layer.material, layer.offset);
+
+        Vector3 localPosition = layer.transform.localPosition;
+        Vector2 localDrift = cameraPosition * layer.parallax * layerMotionMultiplier;
+        layer.transform.localPosition = new Vector3(
+            localDrift.x,
+            localDrift.y,
+            localPosition.z
+        );
     }
 
     public static Texture2D GenerateNebulaTexture(int size, int seed)
@@ -281,19 +293,19 @@ public class ProceduralSpaceBackground : MonoBehaviour
 
     private static Shader FindBackgroundShader()
     {
-        Shader shader = Shader.Find("Sprites/Default");
-        if (shader != null)
-        {
-            return shader;
-        }
-
-        shader = Shader.Find("Universal Render Pipeline/Unlit");
+        Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
         if (shader != null)
         {
             return shader;
         }
 
         shader = Shader.Find("Unlit/Texture");
+        if (shader != null)
+        {
+            return shader;
+        }
+
+        shader = Shader.Find("Sprites/Default");
         if (shader != null)
         {
             return shader;
