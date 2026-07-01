@@ -79,28 +79,27 @@ public class StarSystemGenerator : MonoBehaviour
             });
         }
 
-        for (int field = 0; field < asteroidFieldCount; field++)
+        int asteroidCount = Mathf.Max(0, asteroidFieldCount * asteroidsPerField);
+        float innerAsteroidRadius = scaledSystemRadius * 0.14f;
+
+        for (int i = 0; i < asteroidCount; i++)
         {
-            float fieldRadius = RandomRange(random, scaledSystemRadius * 0.25f, scaledSystemRadius * 0.9f);
-            float fieldAngle = RandomRange(random, 0f, Mathf.PI * 2f);
-            Vector2 fieldCenter = Direction(fieldAngle) * fieldRadius;
+            float t = (i + (float)random.NextDouble()) / Mathf.Max(1, asteroidCount);
+            float radius = Mathf.Lerp(innerAsteroidRadius, scaledSystemRadius * 0.94f, Mathf.Sqrt(t));
+            float angle = RandomRange(random, 0f, Mathf.PI * 2f);
+            Vector2 position = Direction(angle) * radius;
+            ResourceType resourceType = RandomAsteroidResource(random);
 
-            for (int i = 0; i < asteroidsPerField; i++)
+            layout.asteroids.Add(new CelestialBodyDefinition
             {
-                Vector2 offset = Direction(RandomRange(random, 0f, Mathf.PI * 2f)) * RandomRange(random, 1f, 9f);
-                ResourceType resourceType = RandomAsteroidResource(random);
-
-                layout.asteroids.Add(new CelestialBodyDefinition
-                {
-                    name = "Asteroid " + field + "-" + i,
-                    bodyType = CelestialBodyType.Asteroid,
-                    position = fieldCenter + offset,
-                    radius = RandomRange(random, 0.5f, 1.3f),
-                    primaryResource = resourceType,
-                    resourceAmount = random.Next(60, 220),
-                    discoveredAtStart = field == 0 && i < 4
-                });
-            }
+                name = "Asteroid " + i,
+                bodyType = CelestialBodyType.Asteroid,
+                position = position,
+                radius = RandomRange(random, 0.55f, 1.45f),
+                primaryResource = resourceType,
+                resourceAmount = random.Next(60, 220),
+                discoveredAtStart = i < 4
+            });
         }
 
         return layout;
@@ -108,12 +107,16 @@ public class StarSystemGenerator : MonoBehaviour
 
     private void BuildLayout(StarSystemLayout layout)
     {
-        BuildSpriteObject("Star", Vector2.zero, 6f * celestialScaleMultiplier, StarColor(layout.starType), true, MapMarkerType.Star, 6f);
+        BuildSpriteObject("Star", Vector2.zero, 6f * celestialScaleMultiplier, StarColor(layout.starType), true, MapMarkerType.Star, 6f, false);
 
         for (int i = 0; i < layout.planets.Count; i++)
         {
             CelestialBodyDefinition body = layout.planets[i];
-            GameObject planet = BuildSpriteObject(body.name, body.position, body.radius * celestialScaleMultiplier, PlanetColor(body.bodyType), body.discoveredAtStart, MapMarkerType.Planet, body.radius);
+            GameObject planet = BuildSpriteObject(body.name, body.position, body.radius * celestialScaleMultiplier, PlanetColor(body.bodyType), body.discoveredAtStart, MapMarkerType.Planet, body.radius, false);
+            PlanetGravityWell gravityWell = planet.AddComponent<PlanetGravityWell>();
+            gravityWell.surfaceRadius = body.radius * celestialScaleMultiplier * ColliderRadiusForMarker(MapMarkerType.Planet);
+            gravityWell.influenceRadius = gravityWell.surfaceRadius + Mathf.Max(28f, body.radius * celestialScaleMultiplier * 1.7f);
+
             ResourceDeposit deposit = planet.AddComponent<ResourceDeposit>();
             deposit.resourceType = body.primaryResource;
             deposit.maxAmount = body.resourceAmount;
@@ -135,7 +138,7 @@ public class StarSystemGenerator : MonoBehaviour
         }
     }
 
-    private GameObject BuildSpriteObject(string objectName, Vector2 position, float visualRadius, Color color, bool discoveredAtStart, MapMarkerType markerType, float baseRadius)
+    private GameObject BuildSpriteObject(string objectName, Vector2 position, float visualRadius, Color color, bool discoveredAtStart, MapMarkerType markerType, float baseRadius, bool colliderIsTrigger = true)
     {
         GameObject instance = new GameObject(objectName);
         instance.transform.SetParent(generatedRoot);
@@ -143,12 +146,12 @@ public class StarSystemGenerator : MonoBehaviour
         instance.transform.localScale = Vector3.one * visualRadius;
 
         SpriteRenderer spriteRenderer = instance.AddComponent<SpriteRenderer>();
-        spriteRenderer.sprite = markerType == MapMarkerType.Asteroid ? PlaceholderSprites.Pixel : PlaceholderSprites.Circle;
+        spriteRenderer.sprite = SpriteForMarker(markerType);
         spriteRenderer.color = color;
 
         CircleCollider2D collider = instance.AddComponent<CircleCollider2D>();
-        collider.isTrigger = true;
-        collider.radius = 0.5f;
+        collider.isTrigger = colliderIsTrigger;
+        collider.radius = ColliderRadiusForMarker(markerType);
 
         DiscoveryState discovery = instance.AddComponent<DiscoveryState>();
         discovery.SetDiscovered(discoveredAtStart);
@@ -162,6 +165,34 @@ public class StarSystemGenerator : MonoBehaviour
         marker.discoveryState = discovery;
 
         return instance;
+    }
+
+    private static Sprite SpriteForMarker(MapMarkerType markerType)
+    {
+        switch (markerType)
+        {
+            case MapMarkerType.Asteroid:
+                return PlaceholderSprites.Asteroid;
+            case MapMarkerType.Planet:
+                return PlaceholderSprites.Planet;
+            case MapMarkerType.Star:
+                return PlaceholderSprites.Star;
+            default:
+                return PlaceholderSprites.Circle;
+        }
+    }
+
+    public static float ColliderRadiusForMarker(MapMarkerType markerType)
+    {
+        switch (markerType)
+        {
+            case MapMarkerType.Planet:
+                return 0.48f;
+            case MapMarkerType.Star:
+                return 0.47f;
+            default:
+                return 0.5f;
+        }
     }
 
     private void ClearGeneratedRoot()

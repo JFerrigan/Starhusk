@@ -56,4 +56,38 @@ public class StarSystemGeneratorTests
             Assert.That(asteroid.resourceAmount, Is.GreaterThan(0));
         }
     }
+
+    [Test]
+    public void AsteroidsAreDistributedAcrossSystemRadius()
+    {
+        const float systemRadius = 80f;
+        StarSystemLayout layout = StarSystemGenerator.GenerateLayout(1107, systemRadius, 3, 5, 3, 16);
+
+        bool hasInnerAsteroid = false;
+        bool hasOuterAsteroid = false;
+
+        foreach (CelestialBodyDefinition asteroid in layout.asteroids)
+        {
+            if (asteroid.position.magnitude < systemRadius * 0.45f)
+            {
+                hasInnerAsteroid = true;
+            }
+
+            if (asteroid.position.magnitude > systemRadius * 0.75f)
+            {
+                hasOuterAsteroid = true;
+            }
+        }
+
+        Assert.IsTrue(hasInnerAsteroid);
+        Assert.IsTrue(hasOuterAsteroid);
+    }
+
+    [Test]
+    public void ColliderRadiiMatchGeneratedSpriteEdges()
+    {
+        Assert.That(StarSystemGenerator.ColliderRadiusForMarker(MapMarkerType.Planet), Is.EqualTo(0.48f).Within(0.001f));
+        Assert.That(StarSystemGenerator.ColliderRadiusForMarker(MapMarkerType.Star), Is.EqualTo(0.47f).Within(0.001f));
+        Assert.That(StarSystemGenerator.ColliderRadiusForMarker(MapMarkerType.Asteroid), Is.EqualTo(0.5f).Within(0.001f));
+    }
 }
