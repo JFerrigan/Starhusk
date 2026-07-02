@@ -22,6 +22,8 @@ public class GameBootstrap : MonoBehaviour
         EnsureCamera();
         EnsureSpaceBackground();
         EnsureMapController();
+        EnsureBuildingControllers();
+        EnsureAutomatonControllers();
     }
 
     private void EnsurePlayer()
@@ -30,37 +32,48 @@ public class GameBootstrap : MonoBehaviour
         GameObject playerObject;
 
         if (inventory == null)
-        {
-            playerObject = new GameObject("PlayerShip");
-            playerObject.transform.position = new Vector3(0f, -10f, 0f);
-            playerObject.transform.localScale = new Vector3(0.6f, 0.9f, 1f);
+{
+    playerObject = new GameObject("PlayerShip");
+    playerObject.transform.position = new Vector3(0f, -10f, 0f);
+    playerObject.transform.localScale = Vector3.one * 8f;
 
-            SpriteRenderer renderer = playerObject.AddComponent<SpriteRenderer>();
-            renderer.sprite = PlaceholderSprites.Circle;
-            renderer.color = new Color(0.55f, 0.9f, 1f);
+    Rigidbody2D createdRb = playerObject.AddComponent<Rigidbody2D>();
+    createdRb.gravityScale = 0f;
+    createdRb.linearDamping = 0f;
+    createdRb.angularDamping = 2f;
 
-            Rigidbody2D createdRb = playerObject.AddComponent<Rigidbody2D>();
-            createdRb.gravityScale = 0f;
-            createdRb.linearDamping = 0f;
-            createdRb.angularDamping = 2f;
+    playerObject.AddComponent<BoxCollider2D>();
+    playerObject.AddComponent<PlayerMovement>();
+    inventory = playerObject.AddComponent<ResourceInventory>();
+    playerObject.AddComponent<PlayerScanner>();
+}
+else
+{
+    playerObject = inventory.gameObject;
+}
 
-            playerObject.AddComponent<BoxCollider2D>();
-            playerObject.AddComponent<PlayerMovement>();
-            inventory = playerObject.AddComponent<ResourceInventory>();
-            playerObject.AddComponent<PlayerScanner>();
-        }
-        else
-        {
-            playerObject = inventory.gameObject;
-        }
+playerObject.transform.localScale = Vector3.one * 15f;
 
-        if (playerObject.GetComponent<SpriteRenderer>() == null)
-        {
-            SpriteRenderer renderer = playerObject.AddComponent<SpriteRenderer>();
-            renderer.sprite = PlaceholderSprites.Circle;
-            renderer.color = new Color(0.55f, 0.9f, 1f);
-        }
+SpriteRenderer renderer = EnsurePlayerVisual(playerObject);
+if (renderer == null)
+{
+    renderer = playerObject.AddComponent<SpriteRenderer>();
+}
 
+renderer.sprite = LoadPlayerShipSprite();
+renderer.color = Color.white;
+
+BoxCollider2D box = playerObject.GetComponent<BoxCollider2D>();
+if (box == null)
+{
+    box = playerObject.AddComponent<BoxCollider2D>();
+}
+
+if (renderer.sprite != null)
+{
+    box.size = renderer.sprite.bounds.size * 0.55f;
+    box.offset = Vector2.zero;
+}
         Rigidbody2D rb = playerObject.GetComponent<Rigidbody2D>();
         if (rb == null)
         {
@@ -177,4 +190,87 @@ public class GameBootstrap : MonoBehaviour
         GameObject mapObject = new GameObject("BasicMapController");
         mapObject.AddComponent<BasicMapController>();
     }
+
+    private void EnsureBuildingControllers()
+    {
+        if (FindFirstObjectByType<BuildingPlacementController>() == null)
+        {
+            GameObject placementObject = new GameObject("BuildingPlacementController");
+            placementObject.AddComponent<BuildingPlacementController>();
+        }
+
+        if (FindFirstObjectByType<BuildingSelectionController>() == null)
+        {
+            GameObject selectionObject = new GameObject("BuildingSelectionController");
+            selectionObject.AddComponent<BuildingSelectionController>();
+        }
+
+        if (FindFirstObjectByType<HiddenRoutingDisplayController>() == null)
+        {
+            GameObject routingObject = new GameObject("HiddenRoutingDisplayController");
+            routingObject.AddComponent<HiddenRoutingDisplayController>();
+        }
+    }
+
+    private void EnsureAutomatonControllers()
+    {
+        if (FindFirstObjectByType<AutomatonPlacementController>() != null)
+        {
+            return;
+        }
+
+        GameObject placementObject = new GameObject("AutomatonPlacementController");
+        placementObject.AddComponent<AutomatonPlacementController>();
+    }
+
+    private static Sprite LoadPlayerShipSprite()
+    {
+        Sprite shipSprite = Resources.Load<Sprite>("ship");
+
+        if (shipSprite != null)
+        {
+            return shipSprite;
+        }
+
+        Debug.LogWarning("Could not find Assets/Resources/ship.png. Using placeholder ship sprite.");
+        return PlaceholderSprites.Circle;
+    }
+private static SpriteRenderer EnsurePlayerVisual(GameObject playerObject)
+{
+    // Remove the old SpriteRenderer from the root PlayerShip.
+    // We only want the child "ShipVisual" to draw the ship.
+    SpriteRenderer rootRenderer = playerObject.GetComponent<SpriteRenderer>();
+    if (rootRenderer != null)
+    {
+        Object.Destroy(rootRenderer);
+    }
+
+    Transform visualTransform = playerObject.transform.Find("ShipVisual");
+
+    if (visualTransform == null)
+    {
+        GameObject visualObject = new GameObject("ShipVisual");
+        visualObject.transform.SetParent(playerObject.transform, false);
+        visualTransform = visualObject.transform;
+    }
+
+    visualTransform.localPosition = Vector3.zero;
+
+    // Rotate only the image, not the movement/collider root.
+    visualTransform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+
+    visualTransform.localScale = Vector3.one;
+
+    SpriteRenderer renderer = visualTransform.GetComponent<SpriteRenderer>();
+    if (renderer == null)
+    {
+        renderer = visualTransform.gameObject.AddComponent<SpriteRenderer>();
+    }
+
+    renderer.sprite = LoadPlayerShipSprite();
+    renderer.color = Color.white;
+    renderer.sortingOrder = 100;
+
+    return renderer;
+}
 }

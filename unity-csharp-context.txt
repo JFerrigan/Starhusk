@@ -1,0 +1,3338 @@
+
+
+===== ./Assets/Scripts/BasicMapController.cs =====
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.InputSystem;
+
+public class BasicMapController : MonoBehaviour
+{
+    public float minimapSize = 180f;
+    public float minimapMargin = 16f;
+    public float fullMapMargin = 48f;
+    public Color minimapBackground = new Color(0.02f, 0.04f, 0.07f, 0.82f);
+    public Color fullMapBackground = new Color(0.01f, 0.02f, 0.04f, 0.94f);
+    public Color boundaryColor = new Color(0.35f, 0.58f, 0.72f, 0.75f);
+    public Color undiscoveredColor = new Color(0.45f, 0.48f, 0.52f, 0.35f);
+
+    private bool fullMapOpen;
+    private StarSystemGenerator generator;
+    private ResourceInventory playerInventory;
+    private PlayerRadarPing radarPing;
+    private Texture2D pixel;
+    private GUIStyle labelStyle;
+
+    private void Awake()
+    {
+        pixel = Texture2D.whiteTexture;
+        labelStyle = new GUIStyle
+        {
+            fontSize = 13,
+            normal = { textColor = Color.white },
+            alignment = TextAnchor.UpperLeft
+        };
+    }
+
+    private void Update()
+    {
+        if (Keyboard.current != null && Keyboard.current.mKey.wasPressedThisFrame)
+        {
+            fullMapOpen = !fullMapOpen;
+        }
+
+        if (generator == null)
+        {
+            generator = FindFirstObjectByType<StarSystemGenerator>();
+        }
+
+        if (playerInventory == null)
+        {
+            playerInventory = FindFirstObjectByType<ResourceInventory>();
+        }
+
+        if (radarPing == null && playerInventory != null)
+        {
+            radarPing = playerInventory.GetComponent<PlayerRadarPing>();
+        }
+    }
+
+    private void OnGUI()
+    {
+        if (generator == null)
+        {
+            return;
+        }
+
+        Rect minimapRect = new Rect(
+            Screen.width - minimapSize - minimapMargin,
+            minimapMargin,
+            minimapSize,
+            minimapSize
+        );
+
+        DrawMap(minimapRect, minimapBackground, false);
+
+        if (fullMapOpen)
+        {
+            float size = Mathf.Min(Screen.width, Screen.height) - (fullMapMargin * 2f);
+            Rect fullMapRect = new Rect(
+                (Screen.width - size) * 0.5f,
+                (Screen.height - size) * 0.5f,
+                size,
+                size
+            );
+
+            DrawMap(fullMapRect, fullMapBackground, true);
+        }
+    }
+
+    public static Vector2 WorldToMapPosition(Vector2 worldPosition, Rect mapRect, float systemRadius)
+    {
+        float radius = Mathf.Max(systemRadius, 1f);
+        Vector2 normalized = worldPosition / radius;
+        normalized = Vector2.ClampMagnitude(normalized, 1f);
+
+        return new Vector2(
+            mapRect.center.x + (normalized.x * mapRect.width * 0.5f),
+            mapRect.center.y - (normalized.y * mapRect.height * 0.5f)
+        );
+    }
+
+    private void DrawMap(Rect rect, Color backgroundColor, bool includeLabels)
+    {
+        DrawRect(rect, backgroundColor);
+        DrawRectOutline(rect, new Color(0.7f, 0.9f, 1f, 0.35f), 2f);
+
+        float radius = Mathf.Min(rect.width, rect.height) * 0.5f;
+        DrawCircle(rect.center, radius, boundaryColor, 96);
+
+        MapMarker[] markers = FindObjectsByType<MapMarker>(FindObjectsSortMode.None);
+        MapMarker playerMarker = null;
+        for (int i = 0; i < markers.Length; i++)
+        {
+            if (markers[i] != null && markers[i].markerType == MapMarkerType.Player)
+            {
+                playerMarker = markers[i];
+                continue;
+            }
+
+            DrawMarker(markers[i], rect, includeLabels);
+        }
+
+        if (playerMarker != null)
+        {
+            DrawRadarOverlay(rect, playerMarker);
+            DrawMarker(playerMarker, rect, includeLabels);
+        }
+
+        if (includeLabels)
+        {
+            GUI.Label(
+                new Rect(rect.x + 12f, rect.y + 10f, 260f, 42f),
+                "System Map  Seed " + generator.seed + "\nPress M to close",
+                labelStyle
+            );
+        }
+    }
+
+    private void DrawRadarOverlay(Rect rect, MapMarker playerMarker)
+    {
+        if (radarPing == null || playerMarker == null)
+        {
+            return;
+        }
+
+        Vector2 playerPosition = WorldToMapPosition(playerMarker.transform.position, rect, generator.EffectiveSystemRadius);
+        float progress = radarPing.PulseProgress;
+        if (progress < 1f)
+        {
+            float easedProgress = 1f - ((1f - progress) * (1f - progress));
+            float mapRadius = (radarPing.pingRange / Mathf.Max(1f, generator.EffectiveSystemRadius)) * (Mathf.Min(rect.width, rect.height) * 0.5f);
+            Color pulseColor = new Color(0.22f, 0.95f, 1f, Mathf.Lerp(0.85f, 0.05f, progress));
+            DrawCircle(playerPosition, mapRadius * easedProgress, pulseColor, 80);
+        }
+
+        IReadOnlyList<RadarContact> contacts = radarPing.ActiveContacts;
+        for (int i = 0; i < contacts.Count; i++)
+        {
+            RadarContact contact = contacts[i];
+            if (!PlayerRadarPing.IsContactActive(Time.time, contact.expiresAt))
+            {
+                continue;
+            }
+
+            DrawRadarContact(contact, rect);
+        }
+    }
+
+    private void DrawRadarContact(RadarContact contact, Rect rect)
+    {
+        Vector2 position = WorldToMapPosition(contact.worldPosition, rect, generator.EffectiveSystemRadius);
+        float size = Mathf.Max(5f, MarkerSize(contact.markerType) * 0.85f);
+        Color color = RadarContactColor(contact);
+
+        DrawRect(new Rect(position.x - (size * 0.5f), position.y - (size * 0.5f), size, size), color);
+        DrawRectOutline(new Rect(position.x - (size * 0.8f), position.y - (size * 0.8f), size * 1.6f, size * 1.6f), new Color(color.r, color.g, color.b, 0.45f), 1f);
+    }
+
+    private Color RadarContactColor(RadarContact contact)
+    {
+        switch (contact.markerType)
+        {
+            case MapMarkerType.Star:
+                return new Color(1f, 0.76f, 0.22f, 0.95f);
+            case MapMarkerType.Planet:
+                return new Color(0.28f, 0.95f, 1f, 0.95f);
+            default:
+                return new Color(Mathf.Max(0.48f, contact.color.r), Mathf.Max(0.82f, contact.color.g), Mathf.Max(0.9f, contact.color.b), 0.9f);
+        }
+    }
+
+    private void DrawMarker(MapMarker marker, Rect rect, bool includeLabels)
+    {
+        if (marker == null)
+        {
+            return;
+        }
+
+        bool visible = marker.IsVisible;
+        if (!visible && !includeLabels)
+        {
+            return;
+        }
+
+        Vector2 position = WorldToMapPosition(marker.transform.position, rect, generator.EffectiveSystemRadius);
+        float size = MarkerSize(marker.markerType) * Mathf.Max(0.5f, marker.iconScale) * (includeLabels ? 1.25f : 1f);
+        Color color = visible ? marker.markerColor : undiscoveredColor;
+
+        if (marker.markerType == MapMarkerType.Player)
+        {
+            DrawPlayerMarker(position, size, color, marker.transform.eulerAngles.z);
+        }
+        else
+        {
+            DrawRect(new Rect(position.x - (size * 0.5f), position.y - (size * 0.5f), size, size), color);
+        }
+
+        if (includeLabels && visible && marker.markerType != MapMarkerType.Asteroid)
+        {
+            GUI.Label(new Rect(position.x + size, position.y - 8f, 160f, 22f), marker.name, labelStyle);
+        }
+    }
+
+    private float MarkerSize(MapMarkerType markerType)
+    {
+        switch (markerType)
+        {
+            case MapMarkerType.Player:
+                return 8f;
+            case MapMarkerType.Star:
+                return 12f;
+            case MapMarkerType.Planet:
+                return 7f;
+            case MapMarkerType.DysonSatellite:
+                return 5f;
+            default:
+                return 4f;
+        }
+    }
+
+    private void DrawPlayerMarker(Vector2 center, float size, Color color, float zRotation)
+    {
+        DrawRect(new Rect(center.x - (size * 0.5f), center.y - (size * 0.5f), size, size), color);
+
+        float radians = (zRotation + 90f) * Mathf.Deg2Rad;
+        Vector2 direction = new Vector2(Mathf.Cos(radians), -Mathf.Sin(radians));
+        DrawLine(center, center + (direction * size * 1.25f), Color.white, 2f);
+    }
+
+    private void DrawRect(Rect rect, Color color)
+    {
+        Color previous = GUI.color;
+        GUI.color = color;
+        GUI.DrawTexture(rect, pixel);
+        GUI.color = previous;
+    }
+
+    private void DrawRectOutline(Rect rect, Color color, float thickness)
+    {
+        DrawRect(new Rect(rect.xMin, rect.yMin, rect.width, thickness), color);
+        DrawRect(new Rect(rect.xMin, rect.yMax - thickness, rect.width, thickness), color);
+        DrawRect(new Rect(rect.xMin, rect.yMin, thickness, rect.height), color);
+        DrawRect(new Rect(rect.xMax - thickness, rect.yMin, thickness, rect.height), color);
+    }
+
+    private void DrawCircle(Vector2 center, float radius, Color color, int segments)
+    {
+        Vector2 previous = center + new Vector2(radius, 0f);
+
+        for (int i = 1; i <= segments; i++)
+        {
+            float angle = ((float)i / segments) * Mathf.PI * 2f;
+            Vector2 next = center + new Vector2(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius);
+            DrawLine(previous, next, color, 1f);
+            previous = next;
+        }
+    }
+
+    private void DrawLine(Vector2 start, Vector2 end, Color color, float width)
+    {
+        Matrix4x4 previousMatrix = GUI.matrix;
+        Color previousColor = GUI.color;
+
+        Vector2 delta = end - start;
+        float angle = Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg;
+
+        GUI.color = color;
+        GUIUtility.RotateAroundPivot(angle, start);
+        GUI.DrawTexture(new Rect(start.x, start.y - (width * 0.5f), delta.magnitude, width), pixel);
+
+        GUI.matrix = previousMatrix;
+        GUI.color = previousColor;
+    }
+}
+
+
+===== ./Assets/Scripts/CameraFollow.cs =====
+using UnityEngine;
+
+public class CameraFollow : MonoBehaviour
+{
+    public Transform target;
+    public float followAcceleration = 55f;
+    public float velocityDamping = 5f;
+
+    private Vector3 velocity;
+
+    private void LateUpdate()
+    {
+        if (target == null)
+        {
+            return;
+        }
+
+        Vector3 targetPosition = new Vector3(
+            target.position.x,
+            target.position.y,
+            transform.position.z
+        );
+
+        Vector3 offset = targetPosition - transform.position;
+        velocity += offset * followAcceleration * Time.deltaTime;
+        velocity = Vector3.Lerp(velocity, Vector3.zero, velocityDamping * Time.deltaTime);
+        transform.position += velocity * Time.deltaTime;
+    }
+}
+
+
+===== ./Assets/Scripts/DiscoveryState.cs =====
+using UnityEngine;
+
+public class DiscoveryState : MonoBehaviour
+{
+    public bool discovered;
+    public float passiveRevealRadius = 5f;
+
+    private SpriteRenderer[] spriteRenderers;
+
+    private void Awake()
+    {
+        spriteRenderers = GetComponentsInChildren<SpriteRenderer>();
+        ApplyVisibility();
+    }
+
+    private void Update()
+    {
+        ResourceInventory player = FindFirstObjectByType<ResourceInventory>();
+
+        if (!discovered && player != null)
+        {
+            float distance = Vector2.Distance(transform.position, player.transform.position);
+
+            if (distance <= passiveRevealRadius)
+            {
+                Reveal();
+            }
+        }
+    }
+
+    public void Reveal()
+    {
+        if (discovered)
+        {
+            return;
+        }
+
+        discovered = true;
+        ApplyVisibility();
+    }
+
+    public void SetDiscovered(bool value)
+    {
+        discovered = value;
+        ApplyVisibility();
+    }
+
+    private void ApplyVisibility()
+    {
+        if (spriteRenderers == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < spriteRenderers.Length; i++)
+        {
+            Color color = spriteRenderers[i].color;
+            color.a = discovered ? 1f : 0.18f;
+            spriteRenderers[i].color = color;
+        }
+    }
+}
+
+
+===== ./Assets/Scripts/DysonBeamNetwork.cs =====
+using UnityEngine;
+
+public class DysonBeamNetwork : MonoBehaviour
+{
+    public float alignmentToleranceDegrees = 8f;
+    public float beamWidth = 0.18f;
+    public Color beamColor = new Color(1f, 0.92f, 0.35f, 0.82f);
+
+    private DysonSatellite[] dynamicSatellites;
+    private DysonSatellite[] stationarySatellites;
+    private LineRenderer[] beams;
+
+    public void Initialize(DysonSatellite[] dynamicSatellites, DysonSatellite[] stationarySatellites)
+    {
+        this.dynamicSatellites = dynamicSatellites;
+        this.stationarySatellites = stationarySatellites;
+        CreateBeamRenderers(Mathf.Max(1, dynamicSatellites.Length * stationarySatellites.Length));
+    }
+
+    private void LateUpdate()
+    {
+        if (dynamicSatellites == null || stationarySatellites == null || beams == null)
+        {
+            return;
+        }
+
+        int beamIndex = 0;
+        for (int dynamicIndex = 0; dynamicIndex < dynamicSatellites.Length; dynamicIndex++)
+        {
+            DysonSatellite dynamicSatellite = dynamicSatellites[dynamicIndex];
+            if (dynamicSatellite == null)
+            {
+                continue;
+            }
+
+            for (int stationaryIndex = 0; stationaryIndex < stationarySatellites.Length; stationaryIndex++)
+            {
+                DysonSatellite stationarySatellite = stationarySatellites[stationaryIndex];
+                if (stationarySatellite == null || beamIndex >= beams.Length)
+                {
+                    continue;
+                }
+
+                bool aligned = AreAligned(
+                    dynamicSatellite.sunPosition,
+                    dynamicSatellite.transform.position,
+                    stationarySatellite.transform.position,
+                    alignmentToleranceDegrees
+                );
+
+                SetBeam(beams[beamIndex], dynamicSatellite.transform.position, stationarySatellite.transform.position, aligned);
+                beamIndex++;
+            }
+        }
+
+        for (int i = beamIndex; i < beams.Length; i++)
+        {
+            beams[i].enabled = false;
+        }
+    }
+
+    public static bool AreAligned(Vector2 sunPosition, Vector2 dynamicPosition, Vector2 stationaryPosition, float toleranceDegrees)
+    {
+        float dynamicAngle = DysonSatellite.AngleFromSun(sunPosition, dynamicPosition);
+        float stationaryAngle = DysonSatellite.AngleFromSun(sunPosition, stationaryPosition);
+        return Mathf.Abs(Mathf.DeltaAngle(dynamicAngle, stationaryAngle)) <= toleranceDegrees;
+    }
+
+    private void CreateBeamRenderers(int count)
+    {
+        beams = new LineRenderer[count];
+        Shader shader = Shader.Find("Sprites/Default");
+        if (shader == null)
+        {
+            shader = Shader.Find("Universal Render Pipeline/Unlit");
+        }
+
+        for (int i = 0; i < beams.Length; i++)
+        {
+            GameObject beamObject = new GameObject("Dyson Reflection Beam " + i);
+            beamObject.transform.SetParent(transform, false);
+
+            LineRenderer beam = beamObject.AddComponent<LineRenderer>();
+            beam.useWorldSpace = true;
+            beam.positionCount = 2;
+            beam.widthMultiplier = beamWidth;
+            beam.sortingOrder = 450;
+            beam.material = new Material(shader);
+            beam.startColor = beamColor;
+            beam.endColor = new Color(1f, 1f, 0.78f, 0.62f);
+            beam.enabled = false;
+            beams[i] = beam;
+        }
+    }
+
+    private static void SetBeam(LineRenderer beam, Vector2 start, Vector2 end, bool enabled)
+    {
+        beam.enabled = enabled;
+        if (!enabled)
+        {
+            return;
+        }
+
+        beam.SetPosition(0, start);
+        beam.SetPosition(1, end);
+    }
+}
+
+
+===== ./Assets/Scripts/DysonSatellite.cs =====
+using UnityEngine;
+
+public class DysonSatellite : MonoBehaviour
+{
+    public DysonSatelliteMode mode;
+    public Vector2 sunPosition = Vector2.zero;
+    public float orbitRadius = 90f;
+    public float startAngleDegrees;
+    public float orbitSpeedDegrees;
+
+    private float spawnedAt;
+
+    public bool IsDynamic => mode == DysonSatelliteMode.Dynamic;
+
+    private void Awake()
+    {
+        spawnedAt = Time.time;
+    }
+
+    private void Update()
+    {
+        if (!IsDynamic)
+        {
+            return;
+        }
+
+        transform.position = OrbitPositionAtTime(
+            sunPosition,
+            orbitRadius,
+            startAngleDegrees,
+            orbitSpeedDegrees,
+            Time.time - spawnedAt
+        );
+    }
+
+    public static Vector2 OrbitPositionAtTime(Vector2 center, float radius, float startAngleDegrees, float orbitSpeedDegrees, float elapsedSeconds)
+    {
+        float angle = (startAngleDegrees + (orbitSpeedDegrees * elapsedSeconds)) * Mathf.Deg2Rad;
+        return center + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
+    }
+
+    public static float AngleFromSun(Vector2 sunPosition, Vector2 satellitePosition)
+    {
+        Vector2 offset = satellitePosition - sunPosition;
+        return Mathf.Atan2(offset.y, offset.x) * Mathf.Rad2Deg;
+    }
+}
+
+
+===== ./Assets/Scripts/FoundationHud.cs =====
+using UnityEngine;
+
+public class FoundationHud : MonoBehaviour
+{
+    private ResourceInventory inventory;
+    private PlayerMovement playerMovement;
+    private PlayerScanner scanner;
+    private PlayerRadarPing radarPing;
+    private StarSystemGenerator generator;
+    private Texture2D pixel;
+    private GUIStyle labelStyle;
+    private GUIStyle smallLabelStyle;
+
+    private void Awake()
+    {
+        pixel = Texture2D.whiteTexture;
+        labelStyle = new GUIStyle
+        {
+            fontSize = 16,
+            normal = { textColor = Color.white }
+        };
+        smallLabelStyle = new GUIStyle
+        {
+            fontSize = 12,
+            normal = { textColor = Color.white },
+            alignment = TextAnchor.MiddleCenter
+        };
+    }
+
+    private void Update()
+    {
+        if (inventory == null)
+        {
+            inventory = FindFirstObjectByType<ResourceInventory>();
+        }
+
+        if (scanner == null && inventory != null)
+        {
+            scanner = inventory.GetComponent<PlayerScanner>();
+        }
+
+        if (playerMovement == null && inventory != null)
+        {
+            playerMovement = inventory.GetComponent<PlayerMovement>();
+        }
+
+        if (radarPing == null && inventory != null)
+        {
+            radarPing = inventory.GetComponent<PlayerRadarPing>();
+        }
+
+        if (generator == null)
+        {
+            generator = FindFirstObjectByType<StarSystemGenerator>();
+        }
+    }
+
+    private void OnGUI()
+    {
+        if (inventory == null)
+        {
+            return;
+        }
+
+        string scannerState = scanner == null || scanner.IsReady ? "Ready" : "Charging";
+        int seed = generator == null ? 0 : generator.seed;
+        float speed = playerMovement == null ? 0f : playerMovement.Speed;
+
+        GUI.Label(
+            new Rect(12f, 12f, 560f, 100f),
+            "Seed " + seed +
+            "\nOre " + inventory.GetAmount(ResourceType.Ore) +
+            "  Ice " + inventory.GetAmount(ResourceType.Ice) +
+            "  Silicate " + inventory.GetAmount(ResourceType.Silicate) +
+            "  Copper " + inventory.GetAmount(ResourceType.Copper) +
+            "\nScanner " + scannerState +
+            "  Speed " + speed.ToString("0.0"),
+            labelStyle
+        );
+
+        DrawRadarSlot(new Rect(12f, 104f, 64f, 64f));
+        DrawRadarPointers();
+    }
+
+    private void DrawRadarSlot(Rect rect)
+    {
+        bool ready = radarPing == null || radarPing.IsReady;
+        Color frameColor = ready ? new Color(0.2f, 0.95f, 1f, 0.95f) : new Color(0.18f, 0.36f, 0.42f, 0.95f);
+        Color fillColor = ready ? new Color(0.04f, 0.24f, 0.3f, 0.92f) : new Color(0.03f, 0.08f, 0.1f, 0.92f);
+
+        DrawRect(rect, new Color(0f, 0f, 0f, 0.76f));
+        DrawRectOutline(rect, frameColor, 3f);
+        DrawRect(new Rect(rect.x + 6f, rect.y + 6f, rect.width - 12f, rect.height - 12f), fillColor);
+
+        if (radarPing != null && !ready)
+        {
+            float cooldownProgress = 1f - Mathf.Clamp01(radarPing.CooldownRemaining / Mathf.Max(0.01f, radarPing.cooldownSeconds));
+            Rect fillRect = new Rect(rect.x + 6f, rect.yMax - 6f - ((rect.height - 12f) * cooldownProgress), rect.width - 12f, (rect.height - 12f) * cooldownProgress);
+            DrawRect(fillRect, new Color(0.12f, 0.7f, 0.85f, 0.55f));
+        }
+
+        GUI.Label(new Rect(rect.x + 6f, rect.y + 4f, 18f, 18f), "1", smallLabelStyle);
+        GUI.Label(new Rect(rect.x + 6f, rect.y + 23f, rect.width - 12f, 18f), "RAD", smallLabelStyle);
+        GUI.Label(new Rect(rect.x + 6f, rect.y + 41f, rect.width - 12f, 18f), ready ? "RDY" : radarPing.CooldownRemaining.ToString("0.0"), smallLabelStyle);
+    }
+
+    private void DrawRadarPointers()
+    {
+        if (radarPing == null || inventory == null)
+        {
+            return;
+        }
+
+        Vector2 planetPosition;
+        Vector2 starPosition;
+        bool hasPlanet = radarPing.TryGetPointer(MapMarkerType.Planet, out planetPosition);
+        bool hasStar = radarPing.TryGetPointer(MapMarkerType.Star, out starPosition);
+
+        if (!hasPlanet && !hasStar)
+        {
+            return;
+        }
+
+        if (hasPlanet)
+        {
+            DrawEdgePointer("PLANET", planetPosition, new Color(0.28f, 0.95f, 1f, 0.95f), 0f);
+        }
+
+        if (hasStar)
+        {
+            DrawEdgePointer("SUN", starPosition, new Color(1f, 0.76f, 0.22f, 0.95f), hasPlanet ? 24f : 0f);
+        }
+    }
+
+    private void DrawEdgePointer(string label, Vector2 targetPosition, Color color, float separation)
+    {
+        Vector2 worldDelta = targetPosition - (Vector2)inventory.transform.position;
+        Vector2 toTarget = new Vector2(worldDelta.x, -worldDelta.y);
+        if (toTarget.sqrMagnitude < 0.001f)
+        {
+            return;
+        }
+
+        Vector2 direction = toTarget.normalized;
+        Vector2 center = EdgePointerPosition(direction, Screen.width, Screen.height, 34f + separation);
+        Vector2 tip = center + (direction * 20f);
+        Vector2 left = tip - (direction * 8f) + new Vector2(-direction.y, direction.x) * 5f;
+        Vector2 right = tip - (direction * 8f) - new Vector2(-direction.y, direction.x) * 5f;
+        Rect labelRect = new Rect(center.x - 34f, center.y + 16f, 68f, 18f);
+
+        DrawRect(new Rect(center.x - 28f, center.y - 18f, 56f, 52f), new Color(0f, 0f, 0f, 0.52f));
+        DrawRectOutline(new Rect(center.x - 28f, center.y - 18f, 56f, 52f), color, 2f);
+        DrawLine(center - (direction * 10f), tip, color, 4f);
+        DrawLine(tip, left, color, 4f);
+        DrawLine(tip, right, color, 4f);
+        GUI.Label(labelRect, label, smallLabelStyle);
+    }
+
+    public static Vector2 EdgePointerPosition(Vector2 direction, float screenWidth, float screenHeight, float margin)
+    {
+        if (direction.sqrMagnitude < 0.001f)
+        {
+            return new Vector2(screenWidth * 0.5f, margin);
+        }
+
+        Vector2 normalized = direction.normalized;
+        Vector2 center = new Vector2(screenWidth * 0.5f, screenHeight * 0.5f);
+        float halfWidth = Mathf.Max(1f, (screenWidth * 0.5f) - margin);
+        float halfHeight = Mathf.Max(1f, (screenHeight * 0.5f) - margin);
+        float scaleX = Mathf.Abs(normalized.x) > 0.001f ? halfWidth / Mathf.Abs(normalized.x) : float.MaxValue;
+        float scaleY = Mathf.Abs(normalized.y) > 0.001f ? halfHeight / Mathf.Abs(normalized.y) : float.MaxValue;
+        float scale = Mathf.Min(scaleX, scaleY);
+
+        return center + (normalized * scale);
+    }
+
+    private void DrawRect(Rect rect, Color color)
+    {
+        Color previous = GUI.color;
+        GUI.color = color;
+        GUI.DrawTexture(rect, pixel);
+        GUI.color = previous;
+    }
+
+    private void DrawRectOutline(Rect rect, Color color, float thickness)
+    {
+        DrawRect(new Rect(rect.xMin, rect.yMin, rect.width, thickness), color);
+        DrawRect(new Rect(rect.xMin, rect.yMax - thickness, rect.width, thickness), color);
+        DrawRect(new Rect(rect.xMin, rect.yMin, thickness, rect.height), color);
+        DrawRect(new Rect(rect.xMax - thickness, rect.yMin, thickness, rect.height), color);
+    }
+
+    private void DrawLine(Vector2 start, Vector2 end, Color color, float width)
+    {
+        Matrix4x4 previousMatrix = GUI.matrix;
+        Color previousColor = GUI.color;
+
+        Vector2 delta = end - start;
+        float angle = Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg;
+
+        GUI.color = color;
+        GUIUtility.RotateAroundPivot(angle, start);
+        GUI.DrawTexture(new Rect(start.x, start.y - (width * 0.5f), delta.magnitude, width), pixel);
+
+        GUI.matrix = previousMatrix;
+        GUI.color = previousColor;
+    }
+}
+
+
+===== ./Assets/Scripts/GameBootstrap.cs =====
+using UnityEngine;
+
+public class GameBootstrap : MonoBehaviour
+{
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    private static void BootstrapScene()
+    {
+        if (FindFirstObjectByType<GameBootstrap>() != null)
+        {
+            return;
+        }
+
+        GameObject bootstrapObject = new GameObject("GameBootstrap");
+        bootstrapObject.AddComponent<GameBootstrap>();
+        bootstrapObject.AddComponent<FoundationHud>();
+    }
+
+    private void Awake()
+    {
+        EnsurePlayer();
+        EnsureGenerator();
+        EnsureCamera();
+        EnsureSpaceBackground();
+        EnsureMapController();
+    }
+
+    private void EnsurePlayer()
+    {
+        ResourceInventory inventory = FindFirstObjectByType<ResourceInventory>();
+        GameObject playerObject;
+
+        if (inventory == null)
+        {
+            playerObject = new GameObject("PlayerShip");
+            playerObject.transform.position = new Vector3(0f, -10f, 0f);
+            playerObject.transform.localScale = new Vector3(0.6f, 0.9f, 1f);
+
+            SpriteRenderer renderer = playerObject.AddComponent<SpriteRenderer>();
+            renderer.sprite = PlaceholderSprites.Circle;
+            renderer.color = new Color(0.55f, 0.9f, 1f);
+
+            Rigidbody2D createdRb = playerObject.AddComponent<Rigidbody2D>();
+            createdRb.gravityScale = 0f;
+            createdRb.linearDamping = 0f;
+            createdRb.angularDamping = 2f;
+
+            playerObject.AddComponent<BoxCollider2D>();
+            playerObject.AddComponent<PlayerMovement>();
+            inventory = playerObject.AddComponent<ResourceInventory>();
+            playerObject.AddComponent<PlayerScanner>();
+        }
+        else
+        {
+            playerObject = inventory.gameObject;
+        }
+
+        if (playerObject.GetComponent<SpriteRenderer>() == null)
+        {
+            SpriteRenderer renderer = playerObject.AddComponent<SpriteRenderer>();
+            renderer.sprite = PlaceholderSprites.Circle;
+            renderer.color = new Color(0.55f, 0.9f, 1f);
+        }
+
+        Rigidbody2D rb = playerObject.GetComponent<Rigidbody2D>();
+        if (rb == null)
+        {
+            rb = playerObject.AddComponent<Rigidbody2D>();
+        }
+
+        rb.gravityScale = 0f;
+        rb.linearDamping = 0f;
+        rb.angularDamping = Mathf.Max(rb.angularDamping, 2f);
+
+        if (playerObject.GetComponent<Collider2D>() == null)
+        {
+            playerObject.AddComponent<BoxCollider2D>();
+        }
+
+        if (inventory.GetComponent<PlayerScanner>() == null)
+        {
+            inventory.gameObject.AddComponent<PlayerScanner>();
+        }
+
+        if (inventory.GetComponent<PlayerMovement>() == null)
+        {
+            inventory.gameObject.AddComponent<PlayerMovement>();
+        }
+
+        if (inventory.GetComponent<PlayerRadarPing>() == null)
+        {
+            inventory.gameObject.AddComponent<PlayerRadarPing>();
+        }
+
+        if (inventory.GetComponent<MapMarker>() == null)
+        {
+            MapMarker marker = inventory.gameObject.AddComponent<MapMarker>();
+            marker.markerType = MapMarkerType.Player;
+            marker.markerColor = new Color(0.25f, 1f, 0.95f);
+            marker.iconScale = 1.2f;
+            marker.requireDiscovery = false;
+        }
+
+        if (inventory.transform.position.sqrMagnitude < 1f)
+        {
+            inventory.transform.position = new Vector3(0f, -10f, 0f);
+        }
+    }
+
+    private void EnsureGenerator()
+    {
+        if (FindFirstObjectByType<StarSystemGenerator>() != null)
+        {
+            return;
+        }
+
+        GameObject generatorObject = new GameObject("StarSystemGenerator");
+        generatorObject.AddComponent<StarSystemGenerator>();
+    }
+
+    private void EnsureCamera()
+    {
+        Camera camera = Camera.main;
+
+        if (camera == null)
+        {
+            GameObject cameraObject = new GameObject("Main Camera");
+            cameraObject.tag = "MainCamera";
+            camera = cameraObject.AddComponent<Camera>();
+            cameraObject.transform.position = new Vector3(0f, 0f, -10f);
+        }
+
+        camera.orthographic = true;
+        camera.orthographicSize = Mathf.Max(camera.orthographicSize, 16f);
+        camera.backgroundColor = new Color(0.005f, 0.008f, 0.015f);
+        camera.allowMSAA = true;
+
+        CameraFollow follow = camera.GetComponent<CameraFollow>();
+        if (follow == null)
+        {
+            follow = camera.gameObject.AddComponent<CameraFollow>();
+        }
+
+        follow.followAcceleration = Mathf.Max(follow.followAcceleration, 55f);
+        follow.velocityDamping = Mathf.Max(follow.velocityDamping, 5f);
+
+        if (follow.target == null)
+        {
+            ResourceInventory inventory = FindFirstObjectByType<ResourceInventory>();
+            if (inventory != null)
+            {
+                follow.target = inventory.transform;
+            }
+        }
+    }
+
+    private void EnsureSpaceBackground()
+    {
+        Camera camera = Camera.main;
+        if (camera == null)
+        {
+            return;
+        }
+
+        if (camera.GetComponent<ProceduralSpaceBackground>() == null)
+        {
+            camera.gameObject.AddComponent<ProceduralSpaceBackground>();
+        }
+    }
+
+    private void EnsureMapController()
+    {
+        if (FindFirstObjectByType<BasicMapController>() != null)
+        {
+            return;
+        }
+
+        GameObject mapObject = new GameObject("BasicMapController");
+        mapObject.AddComponent<BasicMapController>();
+    }
+}
+
+
+===== ./Assets/Scripts/MapMarker.cs =====
+using UnityEngine;
+
+public enum MapMarkerType
+{
+    Player,
+    Star,
+    Planet,
+    Asteroid,
+    DysonSatellite
+}
+
+public class MapMarker : MonoBehaviour
+{
+    public MapMarkerType markerType = MapMarkerType.Asteroid;
+    public Color markerColor = Color.white;
+    public float iconScale = 1f;
+    public bool requireDiscovery = true;
+    public DiscoveryState discoveryState;
+
+    public bool IsVisible
+    {
+        get
+        {
+            return !requireDiscovery || discoveryState == null || discoveryState.discovered;
+        }
+    }
+
+    private void Awake()
+    {
+        if (discoveryState == null)
+        {
+            discoveryState = GetComponent<DiscoveryState>();
+        }
+    }
+}
+
+
+===== ./Assets/Scripts/MinableAsteroid.cs =====
+using UnityEngine;
+using UnityEngine.InputSystem;
+
+public class MineableAsteroid : MonoBehaviour
+{
+    public int oreAmount = 5;
+    public float interactionRadius = 0.82f;
+
+    private bool playerNearby = false;
+    private ResourceInventory nearbyInventory;
+    private ResourceDeposit deposit;
+
+    private void Awake()
+    {
+        deposit = GetComponent<ResourceDeposit>();
+
+        if (deposit == null)
+        {
+            deposit = gameObject.AddComponent<ResourceDeposit>();
+            deposit.resourceType = ResourceType.Ore;
+            deposit.maxAmount = Mathf.Max(oreAmount, 1);
+            deposit.remainingAmount = deposit.maxAmount;
+            deposit.mineAmountPerInteraction = Mathf.Max(oreAmount, 1);
+        }
+
+        EnsureInteractionTrigger();
+    }
+
+    private void Update()
+    {
+        if (Keyboard.current != null && playerNearby && Keyboard.current.eKey.wasPressedThisFrame)
+        {
+            Mine();
+        }
+    }
+
+    public void Mine()
+    {
+        if (nearbyInventory == null)
+        {
+            return;
+        }
+
+        int minedAmount = deposit.Mine(nearbyInventory);
+        if (minedAmount > 0)
+        {
+            Debug.Log("Mined " + minedAmount + " " + deposit.resourceType);
+        }
+    }
+
+    private void OnTriggerEnter2D(Collider2D other)
+    {
+        ResourceInventory inventory = other.GetComponent<ResourceInventory>();
+
+        if (inventory != null)
+        {
+            playerNearby = true;
+            nearbyInventory = inventory;
+            Debug.Log("Press E to mine " + deposit.resourceType);
+        }
+    }
+
+    private void OnTriggerExit2D(Collider2D other)
+    {
+        ResourceInventory inventory = other.GetComponent<ResourceInventory>();
+
+        if (inventory != null)
+        {
+            playerNearby = false;
+            nearbyInventory = null;
+        }
+    }
+
+    private void EnsureInteractionTrigger()
+    {
+        CircleCollider2D[] colliders = GetComponents<CircleCollider2D>();
+        for (int i = 0; i < colliders.Length; i++)
+        {
+            if (colliders[i].isTrigger)
+            {
+                colliders[i].radius = Mathf.Max(colliders[i].radius, interactionRadius);
+                return;
+            }
+        }
+
+        CircleCollider2D trigger = gameObject.AddComponent<CircleCollider2D>();
+        trigger.isTrigger = true;
+        trigger.radius = interactionRadius;
+    }
+}
+
+
+===== ./Assets/Scripts/PlaceholderSprites.cs =====
+using UnityEngine;
+
+public static class PlaceholderSprites
+{
+    private static Sprite pixel;
+    private static Sprite circle;
+    private static Sprite planet;
+    private static Sprite star;
+    private static Sprite asteroid;
+    private static Sprite dysonSatellite;
+
+    public static Sprite Pixel
+    {
+        get
+        {
+            if (pixel == null)
+            {
+                Texture2D texture = new Texture2D(1, 1);
+                texture.name = "Runtime Placeholder Pixel";
+                texture.filterMode = FilterMode.Point;
+                texture.SetPixel(0, 0, Color.white);
+                texture.Apply();
+
+                pixel = Sprite.Create(
+                    texture,
+                    new Rect(0f, 0f, 1f, 1f),
+                    new Vector2(0.5f, 0.5f),
+                    1f
+                );
+            }
+
+            return pixel;
+        }
+    }
+
+    public static Sprite Circle
+    {
+        get
+        {
+            if (circle == null)
+            {
+                const int size = 64;
+                Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+                texture.name = "Runtime Placeholder Circle";
+                texture.filterMode = FilterMode.Bilinear;
+                texture.wrapMode = TextureWrapMode.Clamp;
+
+                Vector2 center = new Vector2((size - 1) * 0.5f, (size - 1) * 0.5f);
+                float radius = (size - 1) * 0.5f;
+
+                for (int y = 0; y < size; y++)
+                {
+                    for (int x = 0; x < size; x++)
+                    {
+                        float distance = Vector2.Distance(new Vector2(x, y), center) / radius;
+                        float alpha = Mathf.Clamp01(1f - Mathf.InverseLerp(0.92f, 1f, distance));
+                        texture.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
+                    }
+                }
+
+                texture.Apply();
+
+                circle = Sprite.Create(
+                    texture,
+                    new Rect(0f, 0f, size, size),
+                    new Vector2(0.5f, 0.5f),
+                    size
+                );
+            }
+
+            return circle;
+        }
+    }
+
+    public static Sprite Planet
+    {
+        get
+        {
+            if (planet == null)
+            {
+                const int size = 256;
+                Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+                texture.name = "Runtime Placeholder Planet";
+                texture.filterMode = FilterMode.Bilinear;
+                texture.wrapMode = TextureWrapMode.Clamp;
+
+                Vector2 center = new Vector2((size - 1) * 0.5f, (size - 1) * 0.5f);
+                float radius = (size - 1) * 0.48f;
+                Vector2 lightDirection = new Vector2(-0.45f, 0.9f).normalized;
+
+                for (int y = 0; y < size; y++)
+                {
+                    for (int x = 0; x < size; x++)
+                    {
+                        Vector2 pixelPosition = new Vector2(x, y);
+                        Vector2 fromCenter = pixelPosition - center;
+                        float normalizedDistance = fromCenter.magnitude / radius;
+
+                        if (normalizedDistance > 1f)
+                        {
+                            texture.SetPixel(x, y, Color.clear);
+                            continue;
+                        }
+
+                        Vector2 normal = fromCenter.normalized;
+                        float light = Mathf.InverseLerp(-0.7f, 1f, Vector2.Dot(normal, lightDirection));
+                        float rim = Mathf.SmoothStep(0.86f, 1f, normalizedDistance);
+                        float banding = Mathf.PerlinNoise((x * 0.035f) + 7.2f, (y * 0.02f) + 3.1f);
+                        float shade = Mathf.Lerp(0.74f, 1.08f, light) + ((banding - 0.5f) * 0.08f);
+                        shade = Mathf.Lerp(shade, shade * 0.62f, rim);
+
+                        texture.SetPixel(x, y, new Color(shade, shade, shade, 1f));
+                    }
+                }
+
+                texture.Apply();
+
+                planet = Sprite.Create(
+                    texture,
+                    new Rect(0f, 0f, size, size),
+                    new Vector2(0.5f, 0.5f),
+                    size
+                );
+            }
+
+            return planet;
+        }
+    }
+
+    public static Sprite Star
+    {
+        get
+        {
+            if (star == null)
+            {
+                const int size = 256;
+                Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+                texture.name = "Runtime Placeholder Star";
+                texture.filterMode = FilterMode.Bilinear;
+                texture.wrapMode = TextureWrapMode.Clamp;
+
+                Vector2 center = new Vector2((size - 1) * 0.5f, (size - 1) * 0.5f);
+                float radius = (size - 1) * 0.47f;
+
+                for (int y = 0; y < size; y++)
+                {
+                    for (int x = 0; x < size; x++)
+                    {
+                        Vector2 fromCenter = new Vector2(x, y) - center;
+                        float normalizedDistance = fromCenter.magnitude / radius;
+
+                        if (normalizedDistance > 1f)
+                        {
+                            texture.SetPixel(x, y, Color.clear);
+                            continue;
+                        }
+
+                        float core = 1f - Mathf.SmoothStep(0f, 1f, normalizedDistance);
+                        float surfaceNoise = Mathf.PerlinNoise((x * 0.045f) + 18.4f, (y * 0.045f) + 11.7f);
+                        float hotSpot = Mathf.SmoothStep(0.42f, 0.9f, surfaceNoise) * 0.2f;
+                        float rim = Mathf.SmoothStep(0.82f, 1f, normalizedDistance);
+                        float brightness = Mathf.Clamp01(0.82f + (core * 0.32f) + hotSpot - (rim * 0.12f));
+
+                        texture.SetPixel(x, y, new Color(brightness, brightness, brightness, 1f));
+                    }
+                }
+
+                texture.Apply();
+
+                star = Sprite.Create(
+                    texture,
+                    new Rect(0f, 0f, size, size),
+                    new Vector2(0.5f, 0.5f),
+                    size
+                );
+            }
+
+            return star;
+        }
+    }
+
+    public static Sprite Asteroid
+    {
+        get
+        {
+            if (asteroid == null)
+            {
+                const int size = 128;
+                Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+                texture.name = "Runtime Placeholder Asteroid";
+                texture.filterMode = FilterMode.Bilinear;
+                texture.wrapMode = TextureWrapMode.Clamp;
+
+                Vector2 center = new Vector2((size - 1) * 0.5f, (size - 1) * 0.5f);
+                Vector2 lightDirection = new Vector2(-0.55f, 0.75f).normalized;
+
+                for (int y = 0; y < size; y++)
+                {
+                    for (int x = 0; x < size; x++)
+                    {
+                        Vector2 fromCenter = new Vector2(x, y) - center;
+                        float angle = Mathf.Atan2(fromCenter.y, fromCenter.x);
+                        float distance = fromCenter.magnitude / ((size - 1) * 0.42f);
+                        float edgeNoise = Mathf.PerlinNoise(
+                            (Mathf.Cos(angle) * 2.8f) + 12.1f,
+                            (Mathf.Sin(angle) * 2.8f) + 6.4f
+                        );
+                        float radius = Mathf.Lerp(0.78f, 1.16f, edgeNoise);
+
+                        if (distance > radius)
+                        {
+                            texture.SetPixel(x, y, Color.clear);
+                            continue;
+                        }
+
+                        Vector2 normal = fromCenter.sqrMagnitude > 0.001f ? fromCenter.normalized : Vector2.up;
+                        float light = Mathf.InverseLerp(-0.85f, 1f, Vector2.Dot(normal, lightDirection));
+                        float surface = Mathf.PerlinNoise((x * 0.09f) + 22.7f, (y * 0.09f) + 9.3f);
+                        float cracks = Mathf.PerlinNoise((x * 0.19f) + 4.6f, (y * 0.19f) + 31.2f);
+                        float rim = Mathf.SmoothStep(0.72f, 1f, distance / radius);
+                        float shade = Mathf.Lerp(0.62f, 1.04f, light);
+                        shade += (surface - 0.5f) * 0.18f;
+                        shade -= Mathf.SmoothStep(0.62f, 0.78f, cracks) * 0.16f;
+                        shade = Mathf.Lerp(shade, shade * 0.56f, rim);
+                        shade = Mathf.Clamp01(shade);
+
+                        texture.SetPixel(x, y, new Color(shade, shade, shade, 1f));
+                    }
+                }
+
+                texture.Apply();
+
+                asteroid = Sprite.Create(
+                    texture,
+                    new Rect(0f, 0f, size, size),
+                    new Vector2(0.5f, 0.5f),
+                    size
+                );
+            }
+
+            return asteroid;
+        }
+    }
+
+    public static Sprite DysonSatellite
+    {
+        get
+        {
+            if (dysonSatellite == null)
+            {
+                const int size = 96;
+                Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+                texture.name = "Runtime Placeholder Dyson Satellite";
+                texture.filterMode = FilterMode.Point;
+                texture.wrapMode = TextureWrapMode.Clamp;
+
+                for (int y = 0; y < size; y++)
+                {
+                    for (int x = 0; x < size; x++)
+                    {
+                        texture.SetPixel(x, y, Color.clear);
+                    }
+                }
+
+                Color white = Color.white;
+                Color grey = new Color(0.62f, 0.68f, 0.72f, 1f);
+                Color dark = new Color(0.22f, 0.26f, 0.3f, 1f);
+
+                FillRect(texture, 40, 40, 16, 16, white);
+                FillRect(texture, 44, 34, 8, 28, grey);
+                FillRect(texture, 18, 38, 20, 20, grey);
+                FillRect(texture, 58, 38, 20, 20, grey);
+                FillRect(texture, 12, 42, 6, 12, dark);
+                FillRect(texture, 78, 42, 6, 12, dark);
+                FillRect(texture, 28, 34, 8, 4, white);
+                FillRect(texture, 60, 34, 8, 4, white);
+
+                texture.Apply();
+
+                dysonSatellite = Sprite.Create(
+                    texture,
+                    new Rect(0f, 0f, size, size),
+                    new Vector2(0.5f, 0.5f),
+                    size
+                );
+            }
+
+            return dysonSatellite;
+        }
+    }
+
+    private static void FillRect(Texture2D texture, int x, int y, int width, int height, Color color)
+    {
+        for (int iy = y; iy < y + height; iy++)
+        {
+            for (int ix = x; ix < x + width; ix++)
+            {
+                texture.SetPixel(ix, iy, color);
+            }
+        }
+    }
+}
+
+
+===== ./Assets/Scripts/PlanetGravityWell.cs =====
+using UnityEngine;
+
+public class PlanetGravityWell : MonoBehaviour
+{
+    public float surfaceRadius = 12f;
+    public float influenceRadius = 42f;
+    public float maxAcceleration = 1.35f;
+    public float landingAssistBand = 8f;
+    public float landingDamping = 1.8f;
+
+    private Rigidbody2D playerBody;
+
+    private void FixedUpdate()
+    {
+        if (playerBody == null)
+        {
+            ResourceInventory player = FindFirstObjectByType<ResourceInventory>();
+            if (player == null)
+            {
+                return;
+            }
+
+            playerBody = player.GetComponent<Rigidbody2D>();
+            if (playerBody == null)
+            {
+                return;
+            }
+        }
+
+        ApplyGravity(playerBody, Time.fixedDeltaTime);
+    }
+
+    public void ApplyGravity(Rigidbody2D body, float deltaTime)
+    {
+        Vector2 toPlanet = (Vector2)transform.position - body.position;
+        float distance = toPlanet.magnitude;
+        float acceleration = CalculateAcceleration(distance, surfaceRadius, influenceRadius, maxAcceleration);
+
+        if (acceleration <= 0f || distance <= Mathf.Epsilon)
+        {
+            return;
+        }
+
+        Vector2 direction = toPlanet / distance;
+        body.AddForce(direction * acceleration * body.mass, ForceMode2D.Force);
+
+        ApplyLandingDamping(body, direction, distance, deltaTime);
+    }
+
+    public static float CalculateAcceleration(float distance, float surfaceRadius, float influenceRadius, float maxAcceleration)
+    {
+        if (distance >= influenceRadius || maxAcceleration <= 0f)
+        {
+            return 0f;
+        }
+
+        float gravitySpan = Mathf.Max(0.01f, influenceRadius - surfaceRadius);
+        float normalizedDistance = Mathf.Clamp01((distance - surfaceRadius) / gravitySpan);
+        float strength = 1f - Mathf.SmoothStep(0f, 1f, normalizedDistance);
+        return maxAcceleration * strength;
+    }
+
+    private void ApplyLandingDamping(Rigidbody2D body, Vector2 directionToPlanet, float distance, float deltaTime)
+    {
+        float distanceFromSurface = distance - surfaceRadius;
+        if (distanceFromSurface < 0f || distanceFromSurface > landingAssistBand)
+        {
+            return;
+        }
+
+        float assist = 1f - Mathf.Clamp01(distanceFromSurface / Mathf.Max(0.01f, landingAssistBand));
+        Vector2 velocity = body.linearVelocity;
+        float inwardSpeed = Vector2.Dot(velocity, directionToPlanet);
+
+        if (inwardSpeed <= 0f)
+        {
+            return;
+        }
+
+        Vector2 radialVelocity = directionToPlanet * inwardSpeed;
+        float dampingStep = landingDamping * assist * deltaTime;
+        body.linearVelocity = velocity - (radialVelocity * Mathf.Clamp01(dampingStep));
+    }
+}
+
+
+===== ./Assets/Scripts/PlayerMovement.cs =====
+using UnityEngine;
+using UnityEngine.InputSystem;
+
+public class PlayerMovement : MonoBehaviour
+{
+    [Header("Movement")]
+    public float thrustForce = 8f;
+    public float rotationSpeed = 180f;
+    public float reverseThrustMultiplier = 0.5f;
+    public float brakeDeceleration = 28f;
+    public float rotationResponsiveness = 12f;
+
+    private Rigidbody2D rb;
+    private float rotateInput;
+    private float thrustInput;
+    private bool brakeInput;
+    private float currentRotationSpeed;
+
+    public Vector2 Velocity => rb == null ? Vector2.zero : rb.linearVelocity;
+    public float Speed => Velocity.magnitude;
+
+    private void Awake()
+    {
+        rb = GetComponent<Rigidbody2D>();
+
+        if (rb != null)
+        {
+            rb.gravityScale = 0f;
+            rb.interpolation = RigidbodyInterpolation2D.Interpolate;
+            rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
+        }
+    }
+
+    private void Update()
+    {
+        if (Keyboard.current == null)
+        {
+            return;
+        }
+
+        rotateInput = 0f;
+        thrustInput = 0f;
+        brakeInput = false;
+
+        if (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed)
+        {
+            rotateInput = 1f;
+        }
+        else if (Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed)
+        {
+            rotateInput = -1f;
+        }
+
+        if (Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed)
+        {
+            thrustInput = 1f;
+        }
+        else if (Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed)
+        {
+            thrustInput = -reverseThrustMultiplier;
+        }
+
+        brakeInput = Keyboard.current.spaceKey.isPressed;
+    }
+
+    private void FixedUpdate()
+    {
+        if (rb == null)
+        {
+            return;
+        }
+
+        float targetRotationSpeed = rotateInput * rotationSpeed;
+        currentRotationSpeed = Mathf.Lerp(
+            currentRotationSpeed,
+            targetRotationSpeed,
+            rotationResponsiveness * Time.fixedDeltaTime
+        );
+
+        rb.MoveRotation(rb.rotation + (currentRotationSpeed * Time.fixedDeltaTime));
+
+        if (!Mathf.Approximately(thrustInput, 0f))
+        {
+            rb.AddForce(transform.up * thrustForce * thrustInput);
+        }
+
+        if (brakeInput && rb.linearVelocity.sqrMagnitude > 0.01f)
+        {
+            rb.linearVelocity = Vector2.MoveTowards(
+                rb.linearVelocity,
+                Vector2.zero,
+                brakeDeceleration * Time.fixedDeltaTime
+            );
+        }
+    }
+}
+
+
+===== ./Assets/Scripts/PlayerRadarPing.cs =====
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.InputSystem;
+
+public class PlayerRadarPing : MonoBehaviour
+{
+    public float pingRange = 520f;
+    public float cooldownSeconds = 15f;
+    public float pulseDuration = 0.45f;
+    public float contactDuration = 15f;
+
+    private const int PulseSegments = 96;
+
+    private readonly List<RadarContact> contacts = new List<RadarContact>();
+    private LineRenderer pulseRenderer;
+    private float lastPingTime = -999f;
+    private Vector2 nearestPlanetPosition;
+    private Vector2 nearestStarPosition;
+    private bool hasNearestPlanet;
+    private bool hasNearestStar;
+
+    public IReadOnlyList<RadarContact> ActiveContacts => contacts;
+    public bool IsReady => IsReadyAtTime(Time.time, lastPingTime, cooldownSeconds);
+    public float CooldownRemaining => Mathf.Max(0f, (lastPingTime + cooldownSeconds) - Time.time);
+    public float LastPingTime => lastPingTime;
+    public float PulseProgress => CalculatePulseProgress(Time.time, lastPingTime, pulseDuration);
+    public bool HasActivePing => Time.time <= lastPingTime + contactDuration;
+
+    private void Awake()
+    {
+        CreatePulseRenderer();
+    }
+
+    private void Update()
+    {
+        if (Keyboard.current != null && Keyboard.current.digit1Key.wasPressedThisFrame)
+        {
+            Ping();
+        }
+
+        PruneExpiredContacts(Time.time);
+        UpdatePulseVisual();
+    }
+
+    public int Ping()
+    {
+        if (!IsReady)
+        {
+            return 0;
+        }
+
+        lastPingTime = Time.time;
+        contacts.Clear();
+        hasNearestPlanet = false;
+        hasNearestStar = false;
+
+        MapMarker[] markers = FindObjectsByType<MapMarker>(FindObjectsSortMode.None);
+        float nearestPlanetDistance = float.MaxValue;
+        float nearestStarDistance = float.MaxValue;
+
+        for (int i = 0; i < markers.Length; i++)
+        {
+            MapMarker marker = markers[i];
+            if (marker == null || marker.markerType == MapMarkerType.Player)
+            {
+                continue;
+            }
+
+            float distance = Vector2.Distance(transform.position, marker.transform.position);
+            if (distance > pingRange)
+            {
+                continue;
+            }
+
+            contacts.Add(new RadarContact(
+                marker,
+                marker.transform.position,
+                marker.markerType,
+                marker.markerColor,
+                lastPingTime + contactDuration
+            ));
+
+            if (marker.markerType == MapMarkerType.Planet && distance < nearestPlanetDistance)
+            {
+                nearestPlanetDistance = distance;
+                nearestPlanetPosition = marker.transform.position;
+                hasNearestPlanet = true;
+            }
+            else if (marker.markerType == MapMarkerType.Star && distance < nearestStarDistance)
+            {
+                nearestStarDistance = distance;
+                nearestStarPosition = marker.transform.position;
+                hasNearestStar = true;
+            }
+        }
+
+        return contacts.Count;
+    }
+
+    public bool TryGetPointer(MapMarkerType markerType, out Vector2 worldPosition)
+    {
+        if (!HasActivePing)
+        {
+            worldPosition = Vector2.zero;
+            return false;
+        }
+
+        if (markerType == MapMarkerType.Planet && hasNearestPlanet)
+        {
+            worldPosition = nearestPlanetPosition;
+            return true;
+        }
+
+        if (markerType == MapMarkerType.Star && hasNearestStar)
+        {
+            worldPosition = nearestStarPosition;
+            return true;
+        }
+
+        worldPosition = Vector2.zero;
+        return false;
+    }
+
+    public void PruneExpiredContacts(float now)
+    {
+        for (int i = contacts.Count - 1; i >= 0; i--)
+        {
+            if (!IsContactActive(now, contacts[i].expiresAt))
+            {
+                contacts.RemoveAt(i);
+            }
+        }
+    }
+
+    public static bool IsReadyAtTime(float now, float lastPingTime, float cooldownSeconds)
+    {
+        return now >= lastPingTime + Mathf.Max(0f, cooldownSeconds);
+    }
+
+    public static float CalculatePulseProgress(float now, float lastPingTime, float pulseDuration)
+    {
+        if (pulseDuration <= 0f)
+        {
+            return 1f;
+        }
+
+        return Mathf.Clamp01((now - lastPingTime) / pulseDuration);
+    }
+
+    public static bool IsContactActive(float now, float expiresAt)
+    {
+        return now <= expiresAt;
+    }
+
+    private void CreatePulseRenderer()
+    {
+        GameObject pulseObject = new GameObject("Radar Ping Pulse");
+        pulseObject.transform.SetParent(transform, false);
+
+        pulseRenderer = pulseObject.AddComponent<LineRenderer>();
+        pulseRenderer.useWorldSpace = true;
+        pulseRenderer.loop = true;
+        pulseRenderer.positionCount = PulseSegments;
+        pulseRenderer.widthMultiplier = 0.2f;
+        pulseRenderer.sortingOrder = 500;
+        pulseRenderer.enabled = false;
+
+        Shader shader = Shader.Find("Sprites/Default");
+        if (shader == null)
+        {
+            shader = Shader.Find("Universal Render Pipeline/Unlit");
+        }
+
+        pulseRenderer.material = new Material(shader);
+    }
+
+    private void UpdatePulseVisual()
+    {
+        if (pulseRenderer == null)
+        {
+            return;
+        }
+
+        float progress = PulseProgress;
+        if (progress >= 1f)
+        {
+            pulseRenderer.enabled = false;
+            return;
+        }
+
+        pulseRenderer.enabled = true;
+        float easedProgress = 1f - ((1f - progress) * (1f - progress));
+        float radius = pingRange * easedProgress;
+        Vector3 center = transform.position;
+
+        for (int i = 0; i < PulseSegments; i++)
+        {
+            float angle = ((float)i / PulseSegments) * Mathf.PI * 2f;
+            pulseRenderer.SetPosition(
+                i,
+                new Vector3(
+                    center.x + (Mathf.Cos(angle) * radius),
+                    center.y + (Mathf.Sin(angle) * radius),
+                    center.z
+                )
+            );
+        }
+
+        Color color = new Color(0.25f, 0.95f, 1f, Mathf.Lerp(0.85f, 0f, progress));
+        pulseRenderer.startColor = color;
+        pulseRenderer.endColor = color;
+    }
+}
+
+public struct RadarContact
+{
+    public MapMarker marker;
+    public Vector2 worldPosition;
+    public MapMarkerType markerType;
+    public Color color;
+    public float expiresAt;
+
+    public RadarContact(MapMarker marker, Vector2 worldPosition, MapMarkerType markerType, Color color, float expiresAt)
+    {
+        this.marker = marker;
+        this.worldPosition = worldPosition;
+        this.markerType = markerType;
+        this.color = color;
+        this.expiresAt = expiresAt;
+    }
+}
+
+
+===== ./Assets/Scripts/PlayerScanner.cs =====
+using UnityEngine;
+using UnityEngine.InputSystem;
+
+public class PlayerScanner : MonoBehaviour
+{
+    public float scanRadius = 12f;
+    public float cooldownSeconds = 2.5f;
+    public Key scanKey = Key.F;
+
+    private float nextScanTime;
+
+    public bool IsReady => Time.time >= nextScanTime;
+
+    private void Update()
+    {
+        if (Keyboard.current == null)
+        {
+            return;
+        }
+
+        if (Keyboard.current[scanKey].wasPressedThisFrame)
+        {
+            Scan();
+        }
+    }
+
+    public int Scan()
+    {
+        if (!IsReady)
+        {
+            return 0;
+        }
+
+        nextScanTime = Time.time + cooldownSeconds;
+
+        Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, scanRadius);
+        int revealedCount = 0;
+
+        for (int i = 0; i < hits.Length; i++)
+        {
+            DiscoveryState discovery = hits[i].GetComponentInParent<DiscoveryState>();
+
+            if (discovery != null && !discovery.discovered)
+            {
+                discovery.Reveal();
+                revealedCount++;
+            }
+        }
+
+        Debug.Log("Scanner pulse revealed " + revealedCount + " objects");
+        return revealedCount;
+    }
+
+    private void OnDrawGizmosSelected()
+    {
+        Gizmos.color = new Color(0.25f, 0.8f, 1f, 0.25f);
+        Gizmos.DrawWireSphere(transform.position, scanRadius);
+    }
+}
+
+
+===== ./Assets/Scripts/ProceduralSpaceBackground.cs =====
+using UnityEngine;
+
+[RequireComponent(typeof(Camera))]
+public class ProceduralSpaceBackground : MonoBehaviour
+{
+    [Header("Generation")]
+    public int seed = 1107;
+    public int textureSize = 1024;
+    public int nebulaTextureSize = 512;
+    public float starDensity = 0.0028f;
+
+    [Header("Motion")]
+    public float nebulaParallax = 0.03f;
+    public float farStarParallax = 0.08f;
+    public float nearStarParallax = 0.16f;
+    public float speedStretch = 0.06f;
+    public float textureScrollWorldScale = 90f;
+    public float layerMotionMultiplier = 0.08f;
+
+    private Camera attachedCamera;
+    private BackgroundLayer nebulaLayer;
+    private BackgroundLayer farStarLayer;
+    private BackgroundLayer nearStarLayer;
+    private Vector3 previousCameraPosition;
+    private Vector2 travelVelocity;
+
+    private struct BackgroundLayer
+    {
+        public Transform transform;
+        public MeshRenderer renderer;
+        public Material material;
+        public float parallax;
+        public float localDepth;
+        public Vector2 offset;
+    }
+
+    private void Awake()
+    {
+        attachedCamera = GetComponent<Camera>();
+        attachedCamera.backgroundColor = new Color(0.005f, 0.007f, 0.018f);
+        previousCameraPosition = transform.position;
+
+        BuildLayers();
+        ResizeLayersToCamera();
+    }
+
+    private void LateUpdate()
+    {
+        ResizeLayersToCamera();
+        UpdateTravelVelocity();
+        ScrollLayer(ref nebulaLayer);
+        ScrollLayer(ref farStarLayer);
+        ScrollLayer(ref nearStarLayer);
+    }
+
+    private void OnDestroy()
+    {
+        DestroyLayerResources(nebulaLayer);
+        DestroyLayerResources(farStarLayer);
+        DestroyLayerResources(nearStarLayer);
+    }
+
+    private void BuildLayers()
+    {
+        Texture2D nebulaTexture = GenerateNebulaTexture(Mathf.Max(64, nebulaTextureSize), seed);
+        Texture2D farStarTexture = GenerateStarTexture(Mathf.Max(128, textureSize), seed + 17, starDensity, 0.25f, 0.78f);
+        Texture2D nearStarTexture = GenerateStarTexture(Mathf.Max(128, textureSize), seed + 73, starDensity * 0.42f, 0.35f, 1f);
+
+        nebulaLayer = CreateLayer("Procedural Nebula", nebulaTexture, nebulaParallax, 18f, new Color(1f, 1f, 1f, 0.92f), FilterMode.Bilinear);
+        farStarLayer = CreateLayer("Procedural Far Stars", farStarTexture, farStarParallax, 17f, Color.white, FilterMode.Point);
+        nearStarLayer = CreateLayer("Procedural Near Stars", nearStarTexture, nearStarParallax, 16f, Color.white, FilterMode.Point);
+    }
+
+    private BackgroundLayer CreateLayer(string layerName, Texture2D texture, float parallax, float localDepth, Color tint, FilterMode filterMode)
+    {
+        GameObject layerObject = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        layerObject.name = layerName;
+        layerObject.transform.SetParent(transform, false);
+        layerObject.transform.localPosition = new Vector3(0f, 0f, localDepth);
+        layerObject.transform.localRotation = Quaternion.identity;
+
+        Collider collider = layerObject.GetComponent<Collider>();
+        if (collider != null)
+        {
+            Destroy(collider);
+        }
+
+        Material material = new Material(FindBackgroundShader());
+        material.name = layerName + " Material";
+        ApplyMaterialTexture(material, texture);
+        ApplyMaterialColor(material, tint);
+        texture.wrapMode = TextureWrapMode.Repeat;
+        texture.filterMode = filterMode;
+
+        MeshRenderer renderer = layerObject.GetComponent<MeshRenderer>();
+        renderer.sharedMaterial = material;
+        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        renderer.receiveShadows = false;
+
+        return new BackgroundLayer
+        {
+            transform = layerObject.transform,
+            renderer = renderer,
+            material = material,
+            parallax = parallax,
+            localDepth = localDepth,
+            offset = Vector2.zero
+        };
+    }
+
+    private void ResizeLayersToCamera()
+    {
+        if (attachedCamera == null || !attachedCamera.orthographic)
+        {
+            return;
+        }
+
+        float height = attachedCamera.orthographicSize * 2.4f;
+        float width = height * attachedCamera.aspect;
+        Vector3 scale = new Vector3(width, height, 1f);
+
+        ApplyLayerScale(nebulaLayer, scale);
+        ApplyLayerScale(farStarLayer, scale);
+        ApplyLayerScale(nearStarLayer, scale);
+    }
+
+    private static void ApplyLayerScale(BackgroundLayer layer, Vector3 scale)
+    {
+        if (layer.transform != null)
+        {
+            layer.transform.localScale = scale;
+        }
+    }
+
+    private void UpdateTravelVelocity()
+    {
+        Vector3 cameraPosition = transform.position;
+        Vector3 delta = cameraPosition - previousCameraPosition;
+        previousCameraPosition = cameraPosition;
+
+        if (Time.deltaTime <= Mathf.Epsilon)
+        {
+            return;
+        }
+
+        Vector2 currentVelocity = new Vector2(delta.x, delta.y) / Time.deltaTime;
+        travelVelocity = Vector2.Lerp(travelVelocity, currentVelocity, 1f - Mathf.Exp(-8f * Time.deltaTime));
+    }
+
+    private void ScrollLayer(ref BackgroundLayer layer)
+    {
+        if (layer.material == null)
+        {
+            return;
+        }
+
+        Vector2 cameraPosition = transform.position;
+        Vector2 velocityBias = travelVelocity * speedStretch * layer.parallax;
+        layer.offset = ((cameraPosition * layer.parallax) + velocityBias) / Mathf.Max(1f, textureScrollWorldScale);
+        ApplyMaterialOffset(layer.material, layer.offset);
+
+        Vector3 localPosition = layer.transform.localPosition;
+        Vector2 localDrift = cameraPosition * layer.parallax * layerMotionMultiplier;
+        layer.transform.localPosition = new Vector3(
+            localDrift.x,
+            localDrift.y,
+            localPosition.z
+        );
+    }
+
+    public static Texture2D GenerateNebulaTexture(int size, int seed)
+    {
+        Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        texture.name = "Procedural Nebula Texture";
+        texture.wrapMode = TextureWrapMode.Repeat;
+        texture.filterMode = FilterMode.Bilinear;
+
+        float seedX = (seed % 997) * 0.137f;
+        float seedY = (seed % 577) * 0.211f;
+        Color deepSpace = new Color(0.006f, 0.008f, 0.026f, 1f);
+        Color blueViolet = new Color(0.06f, 0.11f, 0.32f, 1f);
+        Color purple = new Color(0.17f, 0.06f, 0.28f, 1f);
+        Color coldBlue = new Color(0.02f, 0.2f, 0.38f, 1f);
+
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                float u = (float)x / size;
+                float v = (float)y / size;
+                float broad = FractalPerlin(u * 2.1f + seedX, v * 2.1f + seedY, 4, 0.5f);
+                float detail = FractalPerlin(u * 7.5f + seedY, v * 7.5f + seedX, 3, 0.58f);
+                float veil = Mathf.SmoothStep(0.28f, 0.92f, broad);
+                float wisps = Mathf.SmoothStep(0.42f, 0.86f, detail) * 0.55f;
+
+                Color color = Color.Lerp(deepSpace, blueViolet, veil * 0.62f);
+                color = Color.Lerp(color, purple, Mathf.Clamp01((detail - 0.48f) * 1.9f));
+                color = Color.Lerp(color, coldBlue, wisps * Mathf.Clamp01(1f - veil * 0.35f));
+                color *= 0.55f + (veil * 0.4f) + (wisps * 0.2f);
+                color.a = 1f;
+
+                texture.SetPixel(x, y, color);
+            }
+        }
+
+        texture.Apply(false, false);
+        return texture;
+    }
+
+    public static Texture2D GenerateStarTexture(int size, int seed, float density, float minBrightness, float maxBrightness)
+    {
+        Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        texture.name = "Procedural Star Texture";
+        texture.wrapMode = TextureWrapMode.Repeat;
+        texture.filterMode = FilterMode.Point;
+
+        Color clear = new Color(0f, 0f, 0f, 0f);
+        Color[] pixels = new Color[size * size];
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            pixels[i] = clear;
+        }
+
+        System.Random random = new System.Random(seed);
+        int candidateCount = Mathf.RoundToInt(size * size * density);
+        float noiseOffsetX = (seed % 4093) * 0.017f;
+        float noiseOffsetY = (seed % 3541) * 0.019f;
+
+        for (int i = 0; i < candidateCount; i++)
+        {
+            int x = random.Next(0, size);
+            int y = random.Next(0, size);
+            float noise = Mathf.PerlinNoise((x * 0.031f) + noiseOffsetX, (y * 0.031f) + noiseOffsetY);
+
+            if (noise < 0.38f)
+            {
+                continue;
+            }
+
+            float randomBrightness = minBrightness + ((float)random.NextDouble() * (maxBrightness - minBrightness));
+            float brightness = Mathf.Clamp01(randomBrightness * Mathf.Lerp(0.68f, 1.18f, noise));
+            int radius = random.NextDouble() > 0.9 ? 1 : 0;
+
+            PlotStar(pixels, size, x, y, radius, brightness);
+        }
+
+        texture.SetPixels(pixels);
+        texture.Apply(false, false);
+        return texture;
+    }
+
+    private static void PlotStar(Color[] pixels, int size, int centerX, int centerY, int radius, float brightness)
+    {
+        Color core = new Color(brightness, brightness, Mathf.Min(1f, brightness * 1.08f), 1f);
+        SetWrappedPixel(pixels, size, centerX, centerY, core);
+
+        if (radius <= 0)
+        {
+            return;
+        }
+
+        Color edge = new Color(brightness * 0.34f, brightness * 0.34f, brightness * 0.42f, 0.5f);
+        SetWrappedPixel(pixels, size, centerX + 1, centerY, edge);
+        SetWrappedPixel(pixels, size, centerX - 1, centerY, edge);
+        SetWrappedPixel(pixels, size, centerX, centerY + 1, edge);
+        SetWrappedPixel(pixels, size, centerX, centerY - 1, edge);
+    }
+
+    private static void SetWrappedPixel(Color[] pixels, int size, int x, int y, Color color)
+    {
+        int wrappedX = (x + size) % size;
+        int wrappedY = (y + size) % size;
+        pixels[(wrappedY * size) + wrappedX] = color;
+    }
+
+    private static float FractalPerlin(float x, float y, int octaves, float persistence)
+    {
+        float amplitude = 1f;
+        float frequency = 1f;
+        float value = 0f;
+        float totalAmplitude = 0f;
+
+        for (int i = 0; i < octaves; i++)
+        {
+            value += Mathf.PerlinNoise(x * frequency, y * frequency) * amplitude;
+            totalAmplitude += amplitude;
+            amplitude *= persistence;
+            frequency *= 2f;
+        }
+
+        return value / totalAmplitude;
+    }
+
+    private static Shader FindBackgroundShader()
+    {
+        Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
+        if (shader != null)
+        {
+            return shader;
+        }
+
+        shader = Shader.Find("Unlit/Texture");
+        if (shader != null)
+        {
+            return shader;
+        }
+
+        shader = Shader.Find("Sprites/Default");
+        if (shader != null)
+        {
+            return shader;
+        }
+
+        return Shader.Find("Standard");
+    }
+
+    private static void ApplyMaterialTexture(Material material, Texture2D texture)
+    {
+        material.mainTexture = texture;
+
+        if (material.HasProperty("_BaseMap"))
+        {
+            material.SetTexture("_BaseMap", texture);
+        }
+    }
+
+    private static void ApplyMaterialColor(Material material, Color tint)
+    {
+        material.color = tint;
+
+        if (material.HasProperty("_BaseColor"))
+        {
+            material.SetColor("_BaseColor", tint);
+        }
+    }
+
+    private static void ApplyMaterialOffset(Material material, Vector2 offset)
+    {
+        material.mainTextureOffset = offset;
+
+        if (material.HasProperty("_BaseMap"))
+        {
+            material.SetTextureOffset("_BaseMap", offset);
+        }
+    }
+
+    private static void DestroyLayerResources(BackgroundLayer layer)
+    {
+        if (Application.isPlaying)
+        {
+            Texture texture = null;
+            if (layer.material != null)
+            {
+                texture = layer.material.mainTexture;
+            }
+            else if (layer.renderer != null && layer.renderer.sharedMaterial != null)
+            {
+                texture = layer.renderer.sharedMaterial.mainTexture;
+            }
+
+            if (layer.material != null)
+            {
+                Destroy(layer.material);
+            }
+
+            if (texture != null)
+            {
+                Destroy(texture);
+            }
+        }
+    }
+}
+
+
+===== ./Assets/Scripts/ResourceDeposit.cs =====
+using UnityEngine;
+
+public class ResourceDeposit : MonoBehaviour
+{
+    public ResourceType resourceType = ResourceType.Ore;
+    public int maxAmount = 100;
+    public int remainingAmount = 100;
+    public int mineAmountPerInteraction = 10;
+    public bool destroyWhenDepleted = true;
+
+    public bool IsDepleted => remainingAmount <= 0;
+
+    private void Awake()
+    {
+        if (maxAmount <= 0)
+        {
+            maxAmount = Mathf.Max(1, remainingAmount);
+        }
+
+        remainingAmount = Mathf.Clamp(remainingAmount, 0, maxAmount);
+        mineAmountPerInteraction = Mathf.Max(1, mineAmountPerInteraction);
+    }
+
+    public int Mine(ResourceInventory inventory)
+    {
+        if (inventory == null || IsDepleted)
+        {
+            return 0;
+        }
+
+        int minedAmount = Mathf.Min(mineAmountPerInteraction, remainingAmount);
+        remainingAmount -= minedAmount;
+        inventory.AddResource(resourceType, minedAmount);
+
+        if (IsDepleted && destroyWhenDepleted)
+        {
+            Destroy(gameObject);
+        }
+
+        return minedAmount;
+    }
+}
+
+
+===== ./Assets/Scripts/ResourceInventory.cs =====
+using UnityEngine;
+using System.Collections.Generic;
+
+public class ResourceInventory : MonoBehaviour
+{
+    [SerializeField]
+    private List<ResourceStack> resources = new List<ResourceStack>();
+
+    [Header("Legacy")]
+    public int ore = 0;
+
+    private void Awake()
+    {
+        if (ore > 0 && GetAmount(ResourceType.Ore) == 0)
+        {
+            AddResource(ResourceType.Ore, ore);
+        }
+
+        SyncLegacyFields();
+    }
+
+    public void AddOre(int amount)
+    {
+        AddResource(ResourceType.Ore, amount);
+    }
+
+    public void AddResource(ResourceType type, int amount)
+    {
+        if (amount <= 0)
+        {
+            return;
+        }
+
+        for (int i = 0; i < resources.Count; i++)
+        {
+            ResourceStack stack = resources[i];
+
+            if (stack.type == type)
+            {
+                stack.amount += amount;
+                resources[i] = stack;
+                SyncLegacyFields();
+                Debug.Log(type + ": " + stack.amount);
+                return;
+            }
+        }
+
+        resources.Add(new ResourceStack(type, amount));
+        SyncLegacyFields();
+        Debug.Log(type + ": " + amount);
+    }
+
+    public int GetAmount(ResourceType type)
+    {
+        for (int i = 0; i < resources.Count; i++)
+        {
+            if (resources[i].type == type)
+            {
+                return resources[i].amount;
+            }
+        }
+
+        return 0;
+    }
+
+    public IReadOnlyList<ResourceStack> GetResources()
+    {
+        return resources;
+    }
+
+    private void SyncLegacyFields()
+    {
+        ore = GetAmount(ResourceType.Ore);
+    }
+}
+
+
+===== ./Assets/Scripts/ResourceStack.cs =====
+using System;
+
+[Serializable]
+public struct ResourceStack
+{
+    public ResourceType type;
+    public int amount;
+
+    public ResourceStack(ResourceType type, int amount)
+    {
+        this.type = type;
+        this.amount = amount;
+    }
+}
+
+
+===== ./Assets/Scripts/ResourceType.cs =====
+public enum ResourceType
+{
+    Ore,
+    Ice,
+    Silicate,
+    Copper
+}
+
+
+===== ./Assets/Scripts/ResourceUI.cs =====
+using TMPro;
+using UnityEngine;
+
+public class ResourceUI : MonoBehaviour
+{
+    public ResourceInventory inventory;
+    public TMP_Text oreText;
+
+    private void Update()
+    {
+        if (inventory == null || oreText == null)
+        {
+            return;
+        }
+
+        oreText.text =
+            "Ore: " + inventory.GetAmount(ResourceType.Ore) +
+            "  Ice: " + inventory.GetAmount(ResourceType.Ice) +
+            "  Silicate: " + inventory.GetAmount(ResourceType.Silicate) +
+            "  Copper: " + inventory.GetAmount(ResourceType.Copper);
+    }
+}
+
+
+===== ./Assets/Scripts/StarSystemData.cs =====
+using System.Collections.Generic;
+using UnityEngine;
+
+public enum StarType
+{
+    Yellow,
+    RedDwarf,
+    Blue,
+    White
+}
+
+public enum CelestialBodyType
+{
+    RockyPlanet,
+    IceMoon,
+    MetallicBody,
+    Asteroid
+}
+
+public enum DysonSatelliteMode
+{
+    Stationary,
+    Dynamic
+}
+
+public struct CelestialBodyDefinition
+{
+    public string name;
+    public CelestialBodyType bodyType;
+    public Vector2 position;
+    public float radius;
+    public ResourceType primaryResource;
+    public int resourceAmount;
+    public bool discoveredAtStart;
+}
+
+public struct DysonSatelliteDefinition
+{
+    public string name;
+    public DysonSatelliteMode mode;
+    public Vector2 position;
+    public float orbitRadius;
+    public float startAngleDegrees;
+    public float orbitSpeedDegrees;
+    public bool discoveredAtStart;
+}
+
+public class StarSystemLayout
+{
+    public int seed;
+    public StarType starType;
+    public List<CelestialBodyDefinition> planets = new List<CelestialBodyDefinition>();
+    public List<CelestialBodyDefinition> asteroids = new List<CelestialBodyDefinition>();
+    public List<DysonSatelliteDefinition> dysonSatellites = new List<DysonSatelliteDefinition>();
+}
+
+
+===== ./Assets/Scripts/StarSystemGenerator.cs =====
+using System;
+using UnityEngine;
+
+public class StarSystemGenerator : MonoBehaviour
+{
+    public int seed = 1107;
+    public float systemRadius = 80f;
+    public float worldScaleMultiplier = 10f;
+    public int minPlanets = 10;
+    public int maxPlanets = 10;
+    public int asteroidFieldCount = 3;
+    public int asteroidsPerField = 16;
+    public int stationaryDysonSatelliteCount = 2;
+    public int dynamicDysonSatelliteCount = 6;
+    public float celestialScaleMultiplier = 10f;
+    public Transform generatedRoot;
+
+    public StarSystemLayout CurrentLayout { get; private set; }
+    public float EffectiveSystemRadius => systemRadius * worldScaleMultiplier;
+
+    private void Start()
+    {
+        GenerateWorld();
+    }
+
+    public void GenerateWorld()
+    {
+        if (generatedRoot == null)
+        {
+            GameObject rootObject = GameObject.Find("GeneratedSystemRoot");
+
+            if (rootObject == null)
+            {
+                rootObject = new GameObject("GeneratedSystemRoot");
+            }
+
+            generatedRoot = rootObject.transform;
+        }
+
+        ClearGeneratedRoot();
+        CurrentLayout = GenerateLayout(seed, systemRadius, minPlanets, maxPlanets, asteroidFieldCount, asteroidsPerField, worldScaleMultiplier, stationaryDysonSatelliteCount, dynamicDysonSatelliteCount);
+        BuildLayout(CurrentLayout);
+    }
+
+    public static StarSystemLayout GenerateLayout(
+        int seed,
+        float systemRadius,
+        int minPlanets,
+        int maxPlanets,
+        int asteroidFieldCount,
+        int asteroidsPerField,
+        float worldScaleMultiplier = 1f,
+        int stationaryDysonSatelliteCount = 2,
+        int dynamicDysonSatelliteCount = 6)
+    {
+        System.Random random = new System.Random(seed);
+        StarSystemLayout layout = new StarSystemLayout
+        {
+            seed = seed,
+            starType = (StarType)random.Next(0, Enum.GetValues(typeof(StarType)).Length)
+        };
+
+        int planetCount = random.Next(minPlanets, maxPlanets + 1);
+        float scaledSystemRadius = systemRadius * worldScaleMultiplier;
+        float orbitStep = scaledSystemRadius / (planetCount + 2);
+
+        for (int i = 0; i < planetCount; i++)
+        {
+            float orbitRadius = orbitStep * (i + 1.5f);
+            float angle = RandomRange(random, 0f, Mathf.PI * 2f);
+            CelestialBodyType bodyType = (CelestialBodyType)random.Next(0, 3);
+            ResourceType resourceType = ResourceForBody(bodyType);
+
+            layout.planets.Add(new CelestialBodyDefinition
+            {
+                name = bodyType + " " + (i + 1),
+                bodyType = bodyType,
+                position = Direction(angle) * orbitRadius,
+                radius = RandomRange(random, 1.8f, 3.5f),
+                primaryResource = resourceType,
+                resourceAmount = random.Next(800, 2400),
+                discoveredAtStart = i == 0
+            });
+        }
+
+        int asteroidCount = Mathf.Max(0, asteroidFieldCount * asteroidsPerField);
+        float innerAsteroidRadius = scaledSystemRadius * 0.14f;
+
+        for (int i = 0; i < asteroidCount; i++)
+        {
+            float t = (i + (float)random.NextDouble()) / Mathf.Max(1, asteroidCount);
+            float radius = Mathf.Lerp(innerAsteroidRadius, scaledSystemRadius * 0.94f, Mathf.Sqrt(t));
+            float angle = RandomRange(random, 0f, Mathf.PI * 2f);
+            Vector2 position = Direction(angle) * radius;
+            ResourceType resourceType = RandomAsteroidResource(random);
+
+            layout.asteroids.Add(new CelestialBodyDefinition
+            {
+                name = "Asteroid " + i,
+                bodyType = CelestialBodyType.Asteroid,
+                position = position,
+                radius = RandomRange(random, 0.55f, 1.45f),
+                primaryResource = resourceType,
+                resourceAmount = random.Next(60, 220),
+                discoveredAtStart = i < 4
+            });
+        }
+
+        GenerateDysonSatellites(layout, random, scaledSystemRadius, stationaryDysonSatelliteCount, dynamicDysonSatelliteCount);
+
+        return layout;
+    }
+
+    private void BuildLayout(StarSystemLayout layout)
+    {
+        BuildSpriteObject("Star", Vector2.zero, 6f * celestialScaleMultiplier, StarColor(layout.starType), true, MapMarkerType.Star, 6f, false);
+
+        for (int i = 0; i < layout.planets.Count; i++)
+        {
+            CelestialBodyDefinition body = layout.planets[i];
+            GameObject planet = BuildSpriteObject(body.name, body.position, body.radius * celestialScaleMultiplier, PlanetColor(body.bodyType), body.discoveredAtStart, MapMarkerType.Planet, body.radius, false);
+            PlanetGravityWell gravityWell = planet.AddComponent<PlanetGravityWell>();
+            gravityWell.surfaceRadius = body.radius * celestialScaleMultiplier * ColliderRadiusForMarker(MapMarkerType.Planet);
+            gravityWell.influenceRadius = gravityWell.surfaceRadius + Mathf.Max(28f, body.radius * celestialScaleMultiplier * 1.7f);
+
+            ResourceDeposit deposit = planet.AddComponent<ResourceDeposit>();
+            deposit.resourceType = body.primaryResource;
+            deposit.maxAmount = body.resourceAmount;
+            deposit.remainingAmount = body.resourceAmount;
+            deposit.mineAmountPerInteraction = 25;
+            deposit.destroyWhenDepleted = false;
+        }
+
+        for (int i = 0; i < layout.asteroids.Count; i++)
+        {
+            CelestialBodyDefinition body = layout.asteroids[i];
+            GameObject asteroid = BuildSpriteObject(body.name, body.position, body.radius * celestialScaleMultiplier, ResourceColor(body.primaryResource), body.discoveredAtStart, MapMarkerType.Asteroid, body.radius);
+            ResourceDeposit deposit = asteroid.AddComponent<ResourceDeposit>();
+            deposit.resourceType = body.primaryResource;
+            deposit.maxAmount = body.resourceAmount;
+            deposit.remainingAmount = body.resourceAmount;
+            deposit.mineAmountPerInteraction = 12;
+            asteroid.AddComponent<MineableAsteroid>();
+        }
+
+        BuildDysonSatellites(layout);
+    }
+
+    private GameObject BuildSpriteObject(string objectName, Vector2 position, float visualRadius, Color color, bool discoveredAtStart, MapMarkerType markerType, float baseRadius, bool colliderIsTrigger = false)
+    {
+        GameObject instance = new GameObject(objectName);
+        instance.transform.SetParent(generatedRoot);
+        instance.transform.position = position;
+        instance.transform.localScale = Vector3.one * visualRadius;
+
+        SpriteRenderer spriteRenderer = instance.AddComponent<SpriteRenderer>();
+        spriteRenderer.sprite = SpriteForMarker(markerType);
+        spriteRenderer.color = color;
+
+        CircleCollider2D collider = instance.AddComponent<CircleCollider2D>();
+        collider.isTrigger = colliderIsTrigger;
+        collider.radius = ColliderRadiusForMarker(markerType);
+
+        DiscoveryState discovery = instance.AddComponent<DiscoveryState>();
+        discovery.SetDiscovered(discoveredAtStart);
+        discovery.passiveRevealRadius = Mathf.Max(4f, visualRadius + 3f);
+
+        MapMarker marker = instance.AddComponent<MapMarker>();
+        marker.markerType = markerType;
+        marker.markerColor = color;
+        marker.iconScale = Mathf.Max(0.75f, baseRadius * 0.45f);
+        marker.requireDiscovery = markerType != MapMarkerType.Star;
+        marker.discoveryState = discovery;
+
+        return instance;
+    }
+
+    private static Sprite SpriteForMarker(MapMarkerType markerType)
+    {
+        switch (markerType)
+        {
+            case MapMarkerType.Asteroid:
+                return PlaceholderSprites.Asteroid;
+            case MapMarkerType.DysonSatellite:
+                return PlaceholderSprites.DysonSatellite;
+            case MapMarkerType.Planet:
+                return PlaceholderSprites.Planet;
+            case MapMarkerType.Star:
+                return PlaceholderSprites.Star;
+            default:
+                return PlaceholderSprites.Circle;
+        }
+    }
+
+    private static void GenerateDysonSatellites(
+        StarSystemLayout layout,
+        System.Random random,
+        float scaledSystemRadius,
+        int stationaryCount,
+        int dynamicCount)
+    {
+        float stationaryOrbitRadius = scaledSystemRadius * 0.17f;
+        float dynamicOrbitRadius = scaledSystemRadius * 0.14f;
+
+        for (int i = 0; i < stationaryCount; i++)
+        {
+            float angle = ((float)i / Mathf.Max(1, stationaryCount)) * 360f;
+            layout.dysonSatellites.Add(new DysonSatelliteDefinition
+            {
+                name = "Dyson Receiver " + i,
+                mode = DysonSatelliteMode.Stationary,
+                position = Direction(angle * Mathf.Deg2Rad) * stationaryOrbitRadius,
+                orbitRadius = stationaryOrbitRadius,
+                startAngleDegrees = angle,
+                orbitSpeedDegrees = 0f,
+                discoveredAtStart = false
+            });
+        }
+
+        for (int i = 0; i < dynamicCount; i++)
+        {
+            float angle = (((float)i / Mathf.Max(1, dynamicCount)) * 360f) + RandomRange(random, -12f, 12f);
+            float speed = RandomRange(random, 5f, 10f) * (i % 2 == 0 ? 1f : -1f);
+            layout.dysonSatellites.Add(new DysonSatelliteDefinition
+            {
+                name = "Dyson Reflector " + i,
+                mode = DysonSatelliteMode.Dynamic,
+                position = Direction(angle * Mathf.Deg2Rad) * dynamicOrbitRadius,
+                orbitRadius = dynamicOrbitRadius,
+                startAngleDegrees = angle,
+                orbitSpeedDegrees = speed,
+                discoveredAtStart = false
+            });
+        }
+    }
+
+    private void BuildDysonSatellites(StarSystemLayout layout)
+    {
+        DysonSatellite[] dynamicSatellites = new DysonSatellite[CountSatellites(layout, DysonSatelliteMode.Dynamic)];
+        DysonSatellite[] stationarySatellites = new DysonSatellite[CountSatellites(layout, DysonSatelliteMode.Stationary)];
+        int dynamicIndex = 0;
+        int stationaryIndex = 0;
+
+        for (int i = 0; i < layout.dysonSatellites.Count; i++)
+        {
+            DysonSatelliteDefinition definition = layout.dysonSatellites[i];
+            GameObject satelliteObject = BuildDysonSatelliteObject(definition);
+            DysonSatellite satellite = satelliteObject.GetComponent<DysonSatellite>();
+
+            if (definition.mode == DysonSatelliteMode.Dynamic)
+            {
+                dynamicSatellites[dynamicIndex] = satellite;
+                dynamicIndex++;
+            }
+            else
+            {
+                stationarySatellites[stationaryIndex] = satellite;
+                stationaryIndex++;
+            }
+        }
+
+        if (dynamicSatellites.Length > 0 && stationarySatellites.Length > 0)
+        {
+            GameObject networkObject = new GameObject("DysonBeamNetwork");
+            networkObject.transform.SetParent(generatedRoot);
+            DysonBeamNetwork network = networkObject.AddComponent<DysonBeamNetwork>();
+            network.Initialize(dynamicSatellites, stationarySatellites);
+        }
+    }
+
+    private GameObject BuildDysonSatelliteObject(DysonSatelliteDefinition definition)
+    {
+        GameObject instance = new GameObject(definition.name);
+        instance.transform.SetParent(generatedRoot);
+        instance.transform.position = definition.position;
+        instance.transform.localScale = Vector3.one * 6f;
+
+        SpriteRenderer spriteRenderer = instance.AddComponent<SpriteRenderer>();
+        spriteRenderer.sprite = PlaceholderSprites.DysonSatellite;
+        spriteRenderer.color = definition.mode == DysonSatelliteMode.Dynamic
+            ? new Color(0.72f, 0.95f, 1f)
+            : new Color(1f, 0.86f, 0.34f);
+
+        DysonSatellite satellite = instance.AddComponent<DysonSatellite>();
+        satellite.mode = definition.mode;
+        satellite.orbitRadius = definition.orbitRadius;
+        satellite.startAngleDegrees = definition.startAngleDegrees;
+        satellite.orbitSpeedDegrees = definition.orbitSpeedDegrees;
+
+        DiscoveryState discovery = instance.AddComponent<DiscoveryState>();
+        discovery.SetDiscovered(definition.discoveredAtStart);
+        discovery.passiveRevealRadius = 18f;
+
+        MapMarker marker = instance.AddComponent<MapMarker>();
+        marker.markerType = MapMarkerType.DysonSatellite;
+        marker.markerColor = spriteRenderer.color;
+        marker.iconScale = 0.8f;
+        marker.requireDiscovery = true;
+        marker.discoveryState = discovery;
+
+        return instance;
+    }
+
+    private static int CountSatellites(StarSystemLayout layout, DysonSatelliteMode mode)
+    {
+        int count = 0;
+        for (int i = 0; i < layout.dysonSatellites.Count; i++)
+        {
+            if (layout.dysonSatellites[i].mode == mode)
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    public static float ColliderRadiusForMarker(MapMarkerType markerType)
+    {
+        switch (markerType)
+        {
+            case MapMarkerType.Planet:
+                return 0.48f;
+            case MapMarkerType.Star:
+                return 0.47f;
+            default:
+                return 0.5f;
+        }
+    }
+
+    private void ClearGeneratedRoot()
+    {
+        for (int i = generatedRoot.childCount - 1; i >= 0; i--)
+        {
+            Destroy(generatedRoot.GetChild(i).gameObject);
+        }
+    }
+
+    private static ResourceType ResourceForBody(CelestialBodyType bodyType)
+    {
+        switch (bodyType)
+        {
+            case CelestialBodyType.IceMoon:
+                return ResourceType.Ice;
+            case CelestialBodyType.MetallicBody:
+                return ResourceType.Copper;
+            default:
+                return ResourceType.Ore;
+        }
+    }
+
+    private static ResourceType RandomAsteroidResource(System.Random random)
+    {
+        int roll = random.Next(0, 100);
+
+        if (roll < 55)
+        {
+            return ResourceType.Ore;
+        }
+
+        if (roll < 75)
+        {
+            return ResourceType.Silicate;
+        }
+
+        if (roll < 90)
+        {
+            return ResourceType.Copper;
+        }
+
+        return ResourceType.Ice;
+    }
+
+    private static Color StarColor(StarType starType)
+    {
+        switch (starType)
+        {
+            case StarType.RedDwarf:
+                return new Color(1f, 0.35f, 0.25f);
+            case StarType.Blue:
+                return new Color(0.45f, 0.7f, 1f);
+            case StarType.White:
+                return new Color(0.9f, 0.95f, 1f);
+            default:
+                return new Color(1f, 0.82f, 0.34f);
+        }
+    }
+
+    private static Color PlanetColor(CelestialBodyType bodyType)
+    {
+        switch (bodyType)
+        {
+            case CelestialBodyType.IceMoon:
+                return new Color(0.55f, 0.8f, 1f);
+            case CelestialBodyType.MetallicBody:
+                return new Color(0.75f, 0.72f, 0.65f);
+            default:
+                return new Color(0.55f, 0.45f, 0.35f);
+        }
+    }
+
+    private static Color ResourceColor(ResourceType resourceType)
+    {
+        switch (resourceType)
+        {
+            case ResourceType.Ice:
+                return new Color(0.45f, 0.9f, 1f);
+            case ResourceType.Silicate:
+                return new Color(0.75f, 0.72f, 0.95f);
+            case ResourceType.Copper:
+                return new Color(0.95f, 0.45f, 0.2f);
+            default:
+                return new Color(0.6f, 0.58f, 0.52f);
+        }
+    }
+
+    private static Vector2 Direction(float radians)
+    {
+        return new Vector2(Mathf.Cos(radians), Mathf.Sin(radians));
+    }
+
+    private static float RandomRange(System.Random random, float min, float max)
+    {
+        return min + ((float)random.NextDouble() * (max - min));
+    }
+}
+
+
+===== ./Assets/Tests/EditMode/BasicMapControllerTests.cs =====
+using NUnit.Framework;
+using UnityEngine;
+
+public class BasicMapControllerTests
+{
+    [Test]
+    public void WorldCenterMapsToRectCenter()
+    {
+        Rect rect = new Rect(10f, 20f, 100f, 100f);
+
+        Vector2 mapPosition = BasicMapController.WorldToMapPosition(Vector2.zero, rect, 80f);
+
+        Assert.That(mapPosition.x, Is.EqualTo(rect.center.x).Within(0.001f));
+        Assert.That(mapPosition.y, Is.EqualTo(rect.center.y).Within(0.001f));
+    }
+
+    [Test]
+    public void PositiveWorldXMapsToRightEdge()
+    {
+        Rect rect = new Rect(0f, 0f, 200f, 200f);
+
+        Vector2 mapPosition = BasicMapController.WorldToMapPosition(new Vector2(80f, 0f), rect, 80f);
+
+        Assert.That(mapPosition.x, Is.EqualTo(rect.xMax).Within(0.001f));
+        Assert.That(mapPosition.y, Is.EqualTo(rect.center.y).Within(0.001f));
+    }
+
+    [Test]
+    public void PositiveWorldYMapsTowardTopEdge()
+    {
+        Rect rect = new Rect(0f, 0f, 200f, 200f);
+
+        Vector2 mapPosition = BasicMapController.WorldToMapPosition(new Vector2(0f, 80f), rect, 80f);
+
+        Assert.That(mapPosition.x, Is.EqualTo(rect.center.x).Within(0.001f));
+        Assert.That(mapPosition.y, Is.EqualTo(rect.yMin).Within(0.001f));
+    }
+
+    [Test]
+    public void PlayerMarkerIsVisibleWithoutDiscovery()
+    {
+        GameObject markerObject = new GameObject("Player Marker");
+
+        try
+        {
+            MapMarker marker = markerObject.AddComponent<MapMarker>();
+            marker.markerType = MapMarkerType.Player;
+            marker.requireDiscovery = false;
+
+            Assert.IsTrue(marker.IsVisible);
+        }
+        finally
+        {
+            Object.DestroyImmediate(markerObject);
+        }
+    }
+
+    [Test]
+    public void DiscoveredMarkerVisibilityFollowsDiscoveryState()
+    {
+        GameObject markerObject = new GameObject("Planet Marker");
+
+        try
+        {
+            DiscoveryState discovery = markerObject.AddComponent<DiscoveryState>();
+            MapMarker marker = markerObject.AddComponent<MapMarker>();
+            marker.requireDiscovery = true;
+            marker.discoveryState = discovery;
+
+            discovery.SetDiscovered(false);
+            Assert.IsFalse(marker.IsVisible);
+
+            discovery.SetDiscovered(true);
+            Assert.IsTrue(marker.IsVisible);
+        }
+        finally
+        {
+            Object.DestroyImmediate(markerObject);
+        }
+    }
+}
+
+
+===== ./Assets/Tests/EditMode/PlanetGravityWellTests.cs =====
+using NUnit.Framework;
+
+public class PlanetGravityWellTests
+{
+    [Test]
+    public void GravityIsZeroOutsideInfluenceRadius()
+    {
+        float acceleration = PlanetGravityWell.CalculateAcceleration(50f, 10f, 40f, 1.35f);
+
+        Assert.That(acceleration, Is.EqualTo(0f));
+    }
+
+    [Test]
+    public void GravityFallsOffTowardInfluenceEdge()
+    {
+        float nearSurface = PlanetGravityWell.CalculateAcceleration(12f, 10f, 40f, 1.35f);
+        float nearEdge = PlanetGravityWell.CalculateAcceleration(35f, 10f, 40f, 1.35f);
+
+        Assert.That(nearSurface, Is.GreaterThan(nearEdge));
+        Assert.That(nearSurface, Is.LessThanOrEqualTo(1.35f));
+        Assert.That(nearEdge, Is.GreaterThan(0f));
+    }
+}
+
+
+===== ./Assets/Tests/EditMode/PlayerRadarPingTests.cs =====
+using NUnit.Framework;
+using UnityEngine;
+
+public class PlayerRadarPingTests
+{
+    [Test]
+    public void PulseProgressClampsToDuration()
+    {
+        Assert.That(PlayerRadarPing.CalculatePulseProgress(2f, 2f, 0.5f), Is.EqualTo(0f).Within(0.001f));
+        Assert.That(PlayerRadarPing.CalculatePulseProgress(2.25f, 2f, 0.5f), Is.EqualTo(0.5f).Within(0.001f));
+        Assert.That(PlayerRadarPing.CalculatePulseProgress(3f, 2f, 0.5f), Is.EqualTo(1f).Within(0.001f));
+    }
+
+    [Test]
+    public void CooldownReadinessUsesLastPingTime()
+    {
+        Assert.IsFalse(PlayerRadarPing.IsReadyAtTime(5f, 2f, 4f));
+        Assert.IsTrue(PlayerRadarPing.IsReadyAtTime(6f, 2f, 4f));
+    }
+
+    [Test]
+    public void ContactsExpireAfterContactWindow()
+    {
+        Assert.IsTrue(PlayerRadarPing.IsContactActive(7f, 7f));
+        Assert.IsFalse(PlayerRadarPing.IsContactActive(7.01f, 7f));
+    }
+
+    [Test]
+    public void RadarDefaultsKeepGuidanceAndCooldownForFifteenSeconds()
+    {
+        PlayerRadarPing radar = new GameObject("Radar").AddComponent<PlayerRadarPing>();
+
+        try
+        {
+            Assert.That(radar.cooldownSeconds, Is.EqualTo(15f).Within(0.001f));
+            Assert.That(radar.contactDuration, Is.EqualTo(15f).Within(0.001f));
+            Assert.That(radar.pulseDuration, Is.LessThan(1f));
+        }
+        finally
+        {
+            Object.DestroyImmediate(radar.gameObject);
+        }
+    }
+
+    [Test]
+    public void EdgePointerPositionUsesNearestScreenEdge()
+    {
+        Vector2 right = FoundationHud.EdgePointerPosition(Vector2.right, 200f, 100f, 10f);
+        Vector2 up = FoundationHud.EdgePointerPosition(Vector2.up, 200f, 100f, 10f);
+
+        Assert.That(right.x, Is.EqualTo(190f).Within(0.001f));
+        Assert.That(right.y, Is.EqualTo(50f).Within(0.001f));
+        Assert.That(up.x, Is.EqualTo(100f).Within(0.001f));
+        Assert.That(up.y, Is.EqualTo(90f).Within(0.001f));
+    }
+}
+
+
+===== ./Assets/Tests/EditMode/ProceduralSpaceBackgroundTests.cs =====
+using NUnit.Framework;
+using UnityEngine;
+
+public class ProceduralSpaceBackgroundTests
+{
+    [Test]
+    public void SameSeedProducesSameStarTexture()
+    {
+        Texture2D first = ProceduralSpaceBackground.GenerateStarTexture(64, 21, 0.01f, 0.2f, 1f);
+        Texture2D second = ProceduralSpaceBackground.GenerateStarTexture(64, 21, 0.01f, 0.2f, 1f);
+
+        try
+        {
+            Color[] firstPixels = first.GetPixels();
+            Color[] secondPixels = second.GetPixels();
+
+            Assert.AreEqual(firstPixels.Length, secondPixels.Length);
+
+            for (int i = 0; i < firstPixels.Length; i++)
+            {
+                Assert.That(firstPixels[i].r, Is.EqualTo(secondPixels[i].r).Within(0.001f));
+                Assert.That(firstPixels[i].a, Is.EqualTo(secondPixels[i].a).Within(0.001f));
+            }
+        }
+        finally
+        {
+            Object.DestroyImmediate(first);
+            Object.DestroyImmediate(second);
+        }
+    }
+
+    [Test]
+    public void StarTextureKeepsStarsSparseAndTiny()
+    {
+        Texture2D texture = ProceduralSpaceBackground.GenerateStarTexture(128, 42, 0.006f, 0.2f, 1f);
+
+        try
+        {
+            int litPixels = 0;
+            foreach (Color pixel in texture.GetPixels())
+            {
+                if (pixel.a > 0.01f)
+                {
+                    litPixels++;
+                }
+            }
+
+            Assert.That(litPixels, Is.GreaterThan(0));
+            Assert.That(litPixels, Is.LessThan(texture.width * texture.height * 0.02f));
+        }
+        finally
+        {
+            Object.DestroyImmediate(texture);
+        }
+    }
+
+    [Test]
+    public void NebulaTextureHasVisibleColorVariation()
+    {
+        Texture2D texture = ProceduralSpaceBackground.GenerateNebulaTexture(64, 1107);
+
+        try
+        {
+            Color[] pixels = texture.GetPixels();
+            float minBlue = float.MaxValue;
+            float maxBlue = float.MinValue;
+
+            foreach (Color pixel in pixels)
+            {
+                minBlue = Mathf.Min(minBlue, pixel.b);
+                maxBlue = Mathf.Max(maxBlue, pixel.b);
+            }
+
+            Assert.That(maxBlue - minBlue, Is.GreaterThan(0.03f));
+        }
+        finally
+        {
+            Object.DestroyImmediate(texture);
+        }
+    }
+}
+
+
+===== ./Assets/Tests/EditMode/StarSystemGeneratorTests.cs =====
+using NUnit.Framework;
+using UnityEngine;
+
+public class StarSystemGeneratorTests
+{
+    [Test]
+    public void SameSeedProducesSameLayout()
+    {
+        StarSystemLayout first = StarSystemGenerator.GenerateLayout(42, 80f, 3, 5, 3, 8);
+        StarSystemLayout second = StarSystemGenerator.GenerateLayout(42, 80f, 3, 5, 3, 8);
+
+        Assert.AreEqual(first.starType, second.starType);
+        Assert.AreEqual(first.planets.Count, second.planets.Count);
+        Assert.AreEqual(first.asteroids.Count, second.asteroids.Count);
+        Assert.AreEqual(first.dysonSatellites.Count, second.dysonSatellites.Count);
+
+        for (int i = 0; i < first.planets.Count; i++)
+        {
+            Assert.That(Vector2.Distance(first.planets[i].position, second.planets[i].position), Is.LessThan(0.001f));
+            Assert.AreEqual(first.planets[i].primaryResource, second.planets[i].primaryResource);
+        }
+
+        for (int i = 0; i < first.asteroids.Count; i++)
+        {
+            Assert.That(Vector2.Distance(first.asteroids[i].position, second.asteroids[i].position), Is.LessThan(0.001f));
+            Assert.AreEqual(first.asteroids[i].resourceAmount, second.asteroids[i].resourceAmount);
+        }
+
+        for (int i = 0; i < first.dysonSatellites.Count; i++)
+        {
+            Assert.That(Vector2.Distance(first.dysonSatellites[i].position, second.dysonSatellites[i].position), Is.LessThan(0.001f));
+            Assert.AreEqual(first.dysonSatellites[i].mode, second.dysonSatellites[i].mode);
+        }
+    }
+
+    [Test]
+    public void DifferentSeedsProduceDifferentLayouts()
+    {
+        StarSystemLayout first = StarSystemGenerator.GenerateLayout(42, 80f, 3, 5, 3, 8);
+        StarSystemLayout second = StarSystemGenerator.GenerateLayout(43, 80f, 3, 5, 3, 8);
+
+        Assert.AreNotEqual(first.planets[0].position, second.planets[0].position);
+    }
+
+    [Test]
+    public void GeneratedBodiesStayInsideSystemBoundsAndHaveFiniteResources()
+    {
+        const float systemRadius = 80f;
+        StarSystemLayout layout = StarSystemGenerator.GenerateLayout(1107, systemRadius, 3, 5, 3, 16);
+
+        Assert.That(layout.planets.Count, Is.InRange(3, 5));
+        Assert.That(layout.asteroids.Count, Is.EqualTo(48));
+
+        foreach (CelestialBodyDefinition planet in layout.planets)
+        {
+            Assert.That(planet.position.magnitude, Is.LessThanOrEqualTo(systemRadius));
+            Assert.That(planet.resourceAmount, Is.GreaterThan(0));
+        }
+
+        foreach (CelestialBodyDefinition asteroid in layout.asteroids)
+        {
+            Assert.That(asteroid.position.magnitude, Is.LessThanOrEqualTo(systemRadius));
+            Assert.That(asteroid.resourceAmount, Is.GreaterThan(0));
+        }
+    }
+
+    [Test]
+    public void AsteroidsAreDistributedAcrossSystemRadius()
+    {
+        const float systemRadius = 80f;
+        StarSystemLayout layout = StarSystemGenerator.GenerateLayout(1107, systemRadius, 3, 5, 3, 16);
+
+        bool hasInnerAsteroid = false;
+        bool hasOuterAsteroid = false;
+
+        foreach (CelestialBodyDefinition asteroid in layout.asteroids)
+        {
+            if (asteroid.position.magnitude < systemRadius * 0.45f)
+            {
+                hasInnerAsteroid = true;
+            }
+
+            if (asteroid.position.magnitude > systemRadius * 0.75f)
+            {
+                hasOuterAsteroid = true;
+            }
+        }
+
+        Assert.IsTrue(hasInnerAsteroid);
+        Assert.IsTrue(hasOuterAsteroid);
+    }
+
+    [Test]
+    public void ColliderRadiiMatchGeneratedSpriteEdges()
+    {
+        Assert.That(StarSystemGenerator.ColliderRadiusForMarker(MapMarkerType.Planet), Is.EqualTo(0.48f).Within(0.001f));
+        Assert.That(StarSystemGenerator.ColliderRadiusForMarker(MapMarkerType.Star), Is.EqualTo(0.47f).Within(0.001f));
+        Assert.That(StarSystemGenerator.ColliderRadiusForMarker(MapMarkerType.Asteroid), Is.EqualTo(0.5f).Within(0.001f));
+    }
+
+    [Test]
+    public void MineableAsteroidAddsInteractionTriggerWithoutReplacingSolidCollider()
+    {
+        GameObject asteroidObject = new GameObject("Asteroid");
+
+        try
+        {
+            CircleCollider2D solidCollider = asteroidObject.AddComponent<CircleCollider2D>();
+            solidCollider.isTrigger = false;
+
+            asteroidObject.AddComponent<MineableAsteroid>();
+
+            CircleCollider2D[] colliders = asteroidObject.GetComponents<CircleCollider2D>();
+            bool hasSolidCollider = false;
+            bool hasTriggerCollider = false;
+
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                hasSolidCollider |= !colliders[i].isTrigger;
+                hasTriggerCollider |= colliders[i].isTrigger;
+            }
+
+            Assert.IsTrue(hasSolidCollider);
+            Assert.IsTrue(hasTriggerCollider);
+        }
+        finally
+        {
+            Object.DestroyImmediate(asteroidObject);
+        }
+    }
+
+    [Test]
+    public void DefaultLayoutContainsDysonSatelliteReceiversAndReflectors()
+    {
+        StarSystemLayout layout = StarSystemGenerator.GenerateLayout(1107, 80f, 3, 5, 3, 16);
+        int stationaryCount = 0;
+        int dynamicCount = 0;
+
+        for (int i = 0; i < layout.dysonSatellites.Count; i++)
+        {
+            if (layout.dysonSatellites[i].mode == DysonSatelliteMode.Stationary)
+            {
+                stationaryCount++;
+            }
+            else if (layout.dysonSatellites[i].mode == DysonSatelliteMode.Dynamic)
+            {
+                dynamicCount++;
+            }
+        }
+
+        Assert.That(stationaryCount, Is.EqualTo(2));
+        Assert.That(dynamicCount, Is.EqualTo(6));
+    }
+
+    [Test]
+    public void DynamicSatelliteOrbitPositionChangesOverTime()
+    {
+        Vector2 first = DysonSatellite.OrbitPositionAtTime(Vector2.zero, 20f, 0f, 10f, 0f);
+        Vector2 second = DysonSatellite.OrbitPositionAtTime(Vector2.zero, 20f, 0f, 10f, 3f);
+
+        Assert.That(Vector2.Distance(first, second), Is.GreaterThan(0.1f));
+    }
+
+    [Test]
+    public void StationarySatellitePositionDoesNotChangeWithZeroOrbitSpeed()
+    {
+        Vector2 first = DysonSatellite.OrbitPositionAtTime(Vector2.zero, 20f, 45f, 0f, 0f);
+        Vector2 second = DysonSatellite.OrbitPositionAtTime(Vector2.zero, 20f, 45f, 0f, 30f);
+
+        Assert.That(Vector2.Distance(first, second), Is.LessThan(0.001f));
+    }
+
+    [Test]
+    public void DysonBeamAlignmentUsesAngularTolerance()
+    {
+        Vector2 dynamicPosition = new Vector2(10f, 0f);
+        Vector2 alignedStation = new Vector2(20f, 1f);
+        Vector2 unalignedStation = new Vector2(0f, 20f);
+
+        Assert.IsTrue(DysonBeamNetwork.AreAligned(Vector2.zero, dynamicPosition, alignedStation, 8f));
+        Assert.IsFalse(DysonBeamNetwork.AreAligned(Vector2.zero, dynamicPosition, unalignedStation, 8f));
+    }
+}

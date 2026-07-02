@@ -11,7 +11,7 @@ public class StarSystemGenerator : MonoBehaviour
     public int asteroidFieldCount = 3;
     public int asteroidsPerField = 16;
     public int stationaryDysonSatelliteCount = 2;
-    public int dynamicDysonSatelliteCount = 300;
+    public int dynamicDysonSatelliteCount = 80;
     public float celestialScaleMultiplier = 10f;
     public Transform generatedRoot;
 
@@ -36,10 +36,11 @@ public class StarSystemGenerator : MonoBehaviour
 
             generatedRoot = rootObject.transform;
         }
-
+        
         ClearGeneratedRoot();
         CurrentLayout = GenerateLayout(seed, systemRadius, minPlanets, maxPlanets, asteroidFieldCount, asteroidsPerField, worldScaleMultiplier, stationaryDysonSatelliteCount, dynamicDysonSatelliteCount);
         BuildLayout(CurrentLayout);
+        SpawnPlayerNearMainPlanet(CurrentLayout);
     }
 
     public static StarSystemLayout GenerateLayout(
@@ -69,7 +70,7 @@ public class StarSystemGenerator : MonoBehaviour
             float orbitRadius = orbitStep * (i + 1.5f);
             float angle = RandomRange(random, 0f, Mathf.PI * 2f);
             CelestialBodyType bodyType = (CelestialBodyType)random.Next(0, 3);
-            ResourceType resourceType = ResourceForBody(bodyType);
+            ResourceType resourceType = ResourceForBody(bodyType, random);
 
             layout.planets.Add(new CelestialBodyDefinition
             {
@@ -119,6 +120,7 @@ public class StarSystemGenerator : MonoBehaviour
         {
             CelestialBodyDefinition body = layout.planets[i];
             GameObject planet = BuildSpriteObject(body.name, body.position, body.radius * celestialScaleMultiplier, PlanetColor(body.bodyType), body.discoveredAtStart, MapMarkerType.Planet, body.radius, false);
+            planet.AddComponent<PlanetLogisticsNetwork>();
             PlanetGravityWell gravityWell = planet.AddComponent<PlanetGravityWell>();
             gravityWell.surfaceRadius = body.radius * celestialScaleMultiplier * ColliderRadiusForMarker(MapMarkerType.Planet);
             gravityWell.influenceRadius = gravityWell.surfaceRadius + Mathf.Max(28f, body.radius * celestialScaleMultiplier * 1.7f);
@@ -287,12 +289,21 @@ public class StarSystemGenerator : MonoBehaviour
         satellite.startAngleDegrees = definition.startAngleDegrees;
         satellite.orbitSpeedDegrees = definition.orbitSpeedDegrees;
 
+        CircleCollider2D collider = instance.AddComponent<CircleCollider2D>();
+        collider.isTrigger = true;
+        collider.radius = ColliderRadiusForMarker(MapMarkerType.DysonSatellite);
+
+        if (definition.mode == DysonSatelliteMode.Stationary)
+        {
+            instance.AddComponent<ManMadeMovableObject>();
+        }
+
         DiscoveryState discovery = instance.AddComponent<DiscoveryState>();
         discovery.SetDiscovered(definition.discoveredAtStart);
         discovery.passiveRevealRadius = 18f;
 
         MapMarker marker = instance.AddComponent<MapMarker>();
-        //marker.markerType = MapMarkerType.DysonSatellite;
+        marker.markerType = MapMarkerType.DysonSatellite;
         marker.markerColor = spriteRenderer.color;
         marker.iconScale = 0.8f;
         marker.requireDiscovery = true;
@@ -336,16 +347,39 @@ public class StarSystemGenerator : MonoBehaviour
         }
     }
 
-    private static ResourceType ResourceForBody(CelestialBodyType bodyType)
+    private static ResourceType ResourceForBody(CelestialBodyType bodyType, System.Random random)
     {
         switch (bodyType)
         {
             case CelestialBodyType.IceMoon:
                 return ResourceType.Ice;
             case CelestialBodyType.MetallicBody:
+                if (random.Next(0, 100) < 20)
+                {
+                    return ResourceType.Silicate;
+                }
+
+                if (random.Next(0, 100) < 40)
+                {
+                    return ResourceType.Biomass;
+                }
+
                 return ResourceType.Copper;
+            case CelestialBodyType.RockyPlanet:
+                int rockyRoll = random.Next(0, 100);
+                if (rockyRoll < 35)
+                {
+                    return ResourceType.Ore;
+                }
+
+                if (rockyRoll < 70)
+                {
+                    return ResourceType.Silicate;
+                }
+
+                return ResourceType.Biomass;
             default:
-                return ResourceType.Ore;
+                return random.Next(0, 100) < 18 ? ResourceType.Biomass : ResourceType.Silicate;
         }
     }
 
@@ -368,7 +402,7 @@ public class StarSystemGenerator : MonoBehaviour
             return ResourceType.Copper;
         }
 
-        return ResourceType.Ice;
+        return ResourceType.Biomass;
     }
 
     private static Color StarColor(StarType starType)
@@ -409,6 +443,8 @@ public class StarSystemGenerator : MonoBehaviour
                 return new Color(0.75f, 0.72f, 0.95f);
             case ResourceType.Copper:
                 return new Color(0.95f, 0.45f, 0.2f);
+            case ResourceType.Biomass:
+                return new Color(0.42f, 0.95f, 0.44f);
             default:
                 return new Color(0.6f, 0.58f, 0.52f);
         }
@@ -423,4 +459,36 @@ public class StarSystemGenerator : MonoBehaviour
     {
         return min + ((float)random.NextDouble() * (max - min));
     }
+
+    private void SpawnPlayerNearMainPlanet(StarSystemLayout layout)
+{
+    if (layout == null || layout.planets == null || layout.planets.Count == 0)
+    {
+        return;
+    }
+
+    ResourceInventory player = FindFirstObjectByType<ResourceInventory>();
+    if (player == null)
+    {
+        return;
+    }
+
+    CelestialBodyDefinition mainPlanet = layout.planets[0];
+
+    float planetWorldRadius = mainPlanet.radius * celestialScaleMultiplier;
+    Vector2 directionAwayFromSun = mainPlanet.position.sqrMagnitude > 0.01f
+        ? mainPlanet.position.normalized
+        : Vector2.up;
+
+    Vector2 spawnPosition = mainPlanet.position + directionAwayFromSun * (planetWorldRadius + 8f);
+
+    Rigidbody2D rb = player.GetComponent<Rigidbody2D>();
+    if (rb != null)
+    {
+        rb.linearVelocity = Vector2.zero;
+        rb.angularVelocity = 0f;
+    }
+
+    player.transform.position = new Vector3(spawnPosition.x, spawnPosition.y, player.transform.position.z);
+}
 }

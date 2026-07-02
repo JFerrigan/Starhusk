@@ -73,6 +73,7 @@ public class FoundationHud : MonoBehaviour
             "  Ice " + inventory.GetAmount(ResourceType.Ice) +
             "  Silicate " + inventory.GetAmount(ResourceType.Silicate) +
             "  Copper " + inventory.GetAmount(ResourceType.Copper) +
+            "  Biomass " + inventory.GetAmount(ResourceType.Biomass) +
             "\nScanner " + scannerState +
             "  Speed " + speed.ToString("0.0"),
             labelStyle

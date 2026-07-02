@@ -17,6 +17,7 @@ public class ResourceUI : MonoBehaviour
             "Ore: " + inventory.GetAmount(ResourceType.Ore) +
             "  Ice: " + inventory.GetAmount(ResourceType.Ice) +
             "  Silicate: " + inventory.GetAmount(ResourceType.Silicate) +
-            "  Copper: " + inventory.GetAmount(ResourceType.Copper);
+            "  Copper: " + inventory.GetAmount(ResourceType.Copper) +
+            "  Biomass: " + inventory.GetAmount(ResourceType.Biomass);
     }
 }

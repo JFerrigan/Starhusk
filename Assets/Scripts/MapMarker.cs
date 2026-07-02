@@ -6,7 +6,9 @@ public enum MapMarkerType
     Star,
     Planet,
     Asteroid,
-    DysonSatellite
+    DysonSatellite,
+    Collector,
+    Hub
 }
 
 public class MapMarker : MonoBehaviour

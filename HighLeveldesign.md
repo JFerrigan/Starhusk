@@ -1,5 +1,18 @@
 # Starhusk — Full Game Design and Implementation Plan
 
+## 0. Latest Ideas.
+
+-Make the speed of the ship determine the zoom of the camera. We'll eventually implement different levels of speed to control this.
+-Once you start leaving the solar system it'll unlock a solar mini map that allows you to move the camrea to known areas without travelling there.
+-
+
+##TODO:
+- improve movement system hybrid acceleaation approach? or tiered speed system.
+- when you get close to planet, the target arrow should land on the planet, not still at the edge of the screen.
+
+
+
+
 ## 1. Overview
 
 **Starhusk** is a 2D pixel-art space exploration, automation, and megastructure-building game.
@@ -71,9 +84,9 @@ Are you building a future, or are you only leaving husks behind?
 
 The player begins in a single star system with a small ship, basic tools, and limited knowledge of the galaxy.
 
-Possible story setup:
-
 Humanity, or a post-human machine civilization, has launched the player as the first autonomous stellar architect. The home civilization needs energy, expansion, survival, or escape. The player’s mission is to build the first self-sustaining Dyson infrastructure network and eventually construct a stellar engine.
+
+The player interacts with the home planet through world leaders and An council organization designed for guiding the architect.
 
 The early story should be sparse. The first hours should feel lonely, quiet, and exploratory.
 
@@ -137,7 +150,7 @@ To build it, the player needs:
 
 Once built, the stellar engine allows the player to reach a new star system.
 
-This should feel like a major achievement, almost like launching a rocket in Factorio.
+This should feel like a major achievement.
 
 ## 3.5 First Contact Arc
 
@@ -261,7 +274,7 @@ The final project is a galactic-scale Dyson network, possibly involving:
 
 Starhusk should use 2D pixel art with strong silhouettes and readable colors.
 
-The camera is top-down or slightly angled top-down. The game takes place in open 2D space.
+The camera is top-down. The game takes place in open 2D space.
 
 Visual priorities:
 

@@ -171,6 +171,39 @@ public class StarSystemGeneratorTests
     }
 
     [Test]
+    public void StationarySatellitePlacementUpdatesOrbitData()
+    {
+        GameObject satelliteObject = new GameObject("Stationary Satellite");
+
+        try
+        {
+            DysonSatellite satellite = satelliteObject.AddComponent<DysonSatellite>();
+            satellite.mode = DysonSatelliteMode.Stationary;
+
+            satellite.SetStationaryPosition(new Vector2(0f, 15f));
+
+            Assert.That(satellite.orbitRadius, Is.EqualTo(15f).Within(0.001f));
+            Assert.That(satellite.startAngleDegrees, Is.EqualTo(90f).Within(0.001f));
+            Assert.That(satellite.orbitSpeedDegrees, Is.EqualTo(0f).Within(0.001f));
+            Assert.That(Vector2.Distance(satellite.transform.position, new Vector2(0f, 15f)), Is.LessThan(0.001f));
+        }
+        finally
+        {
+            Object.DestroyImmediate(satelliteObject);
+        }
+    }
+
+    [Test]
+    public void MovableObjectPlacementPreservesDepth()
+    {
+        Vector3 placement = ManMadeMovableObject.PlacementPosition(new Vector2(12f, -4f), -2f);
+
+        Assert.That(placement.x, Is.EqualTo(12f).Within(0.001f));
+        Assert.That(placement.y, Is.EqualTo(-4f).Within(0.001f));
+        Assert.That(placement.z, Is.EqualTo(-2f).Within(0.001f));
+    }
+
+    [Test]
     public void DysonBeamAlignmentUsesAngularTolerance()
     {
         Vector2 dynamicPosition = new Vector2(10f, 0f);

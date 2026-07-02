@@ -44,4 +44,19 @@ public class DysonSatellite : MonoBehaviour
         Vector2 offset = satellitePosition - sunPosition;
         return Mathf.Atan2(offset.y, offset.x) * Mathf.Rad2Deg;
     }
+
+    public void SetStationaryPosition(Vector2 position)
+    {
+        transform.position = position;
+
+        if (IsDynamic)
+        {
+            return;
+        }
+
+        Vector2 offset = position - sunPosition;
+        orbitRadius = offset.magnitude;
+        startAngleDegrees = AngleFromSun(sunPosition, position);
+        orbitSpeedDegrees = 0f;
+    }
 }
