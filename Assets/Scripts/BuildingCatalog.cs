@@ -70,7 +70,7 @@ public static class BuildingCatalog
                     capacity = 250,
                     extractAmountPerTick = 5,
                     extractionInterval = 1f,
-                    requiredResourceType = null
+                    requiredResourceType = ResourceType.Ore
                 };
         }
     }
@@ -98,10 +98,25 @@ public static class BuildingCatalog
     }
 
     public static bool CanHoldResource(BuildingType buildingType, ResourceType resourceType)
+{
+    return RequiredResourceFor(buildingType) == resourceType;
+}
+
+public static bool CanPlaceOnDeposit(BuildingType buildingType, ResourceDeposit deposit)
+{
+    if (deposit == null)
     {
-        ResourceType? requiredResourceType = GetDefinition(buildingType).requiredResourceType;
-        return !requiredResourceType.HasValue || requiredResourceType.Value == resourceType;
+        return false;
     }
+
+    return deposit.HasResource(RequiredResourceFor(buildingType));
+}
+
+public static ResourceType RequiredResourceFor(BuildingType buildingType)
+{
+    ResourceType? requiredResourceType = GetDefinition(buildingType).requiredResourceType;
+    return requiredResourceType.HasValue ? requiredResourceType.Value : ResourceType.Ore;
+}
 
     public static string GetDisplayName(BuildingType buildingType, BuildingTier tier)
     {

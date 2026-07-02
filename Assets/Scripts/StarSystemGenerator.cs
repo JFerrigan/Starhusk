@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class StarSystemGenerator : MonoBehaviour
@@ -65,24 +66,32 @@ public class StarSystemGenerator : MonoBehaviour
         float scaledSystemRadius = systemRadius * worldScaleMultiplier;
         float orbitStep = scaledSystemRadius / (planetCount + 2);
 
-        for (int i = 0; i < planetCount; i++)
-        {
-            float orbitRadius = orbitStep * (i + 1.5f);
-            float angle = RandomRange(random, 0f, Mathf.PI * 2f);
-            CelestialBodyType bodyType = (CelestialBodyType)random.Next(0, 3);
-            ResourceType resourceType = ResourceForBody(bodyType, random);
+       for (int i = 0; i < planetCount; i++)
+{
+    float orbitRadius = orbitStep * (i + 1.5f);
+    float angle = RandomRange(random, 0f, Mathf.PI * 2f);
+    CelestialBodyType bodyType = (CelestialBodyType)random.Next(0, 3);
+    List<ResourceStack> planetResources = PlanetResourcesForBody(bodyType, random, i == 0);
+    ResourceType primaryResource = planetResources.Count > 0 ? planetResources[0].type : ResourceType.Ore;
 
-            layout.planets.Add(new CelestialBodyDefinition
-            {
-                name = bodyType + " " + (i + 1),
-                bodyType = bodyType,
-                position = Direction(angle) * orbitRadius,
-                radius = RandomRange(random, 1.8f, 3.5f),
-                primaryResource = resourceType,
-                resourceAmount = random.Next(800, 2400),
-                discoveredAtStart = i == 0
-            });
-        }
+    int totalResourceAmount = 0;
+    for (int resourceIndex = 0; resourceIndex < planetResources.Count; resourceIndex++)
+    {
+        totalResourceAmount += planetResources[resourceIndex].amount;
+    }
+
+    layout.planets.Add(new CelestialBodyDefinition
+    {
+        name = bodyType + " " + (i + 1),
+        bodyType = bodyType,
+        position = Direction(angle) * orbitRadius,
+        radius = RandomRange(random, 1.8f, 3.5f),
+        primaryResource = primaryResource,
+        resourceAmount = totalResourceAmount,
+        resources = planetResources,
+        discoveredAtStart = i == 0
+    });
+}
 
         int asteroidCount = Mathf.Max(0, asteroidFieldCount * asteroidsPerField);
         float innerAsteroidRadius = scaledSystemRadius * 0.14f;
@@ -126,11 +135,17 @@ public class StarSystemGenerator : MonoBehaviour
             gravityWell.influenceRadius = gravityWell.surfaceRadius + Mathf.Max(28f, body.radius * celestialScaleMultiplier * 1.7f);
 
             ResourceDeposit deposit = planet.AddComponent<ResourceDeposit>();
-            deposit.resourceType = body.primaryResource;
-            deposit.maxAmount = body.resourceAmount;
-            deposit.remainingAmount = body.resourceAmount;
-            deposit.mineAmountPerInteraction = 25;
-            deposit.destroyWhenDepleted = false;
+
+if (body.resources != null && body.resources.Count > 0)
+{
+    deposit.ConfigureResources(body.resources, 25);
+}
+else
+{
+    deposit.ConfigureSingleResource(body.primaryResource, body.resourceAmount, 25);
+}
+
+deposit.destroyWhenDepleted = false;
         }
 
         for (int i = 0; i < layout.asteroids.Count; i++)
@@ -138,11 +153,8 @@ public class StarSystemGenerator : MonoBehaviour
             CelestialBodyDefinition body = layout.asteroids[i];
             GameObject asteroid = BuildSpriteObject(body.name, body.position, body.radius * celestialScaleMultiplier, ResourceColor(body.primaryResource), body.discoveredAtStart, MapMarkerType.Asteroid, body.radius);
             ResourceDeposit deposit = asteroid.AddComponent<ResourceDeposit>();
-            deposit.resourceType = body.primaryResource;
-            deposit.maxAmount = body.resourceAmount;
-            deposit.remainingAmount = body.resourceAmount;
-            deposit.mineAmountPerInteraction = 12;
-            asteroid.AddComponent<MineableAsteroid>();
+deposit.ConfigureSingleResource(body.primaryResource, body.resourceAmount, 12);
+asteroid.AddComponent<MineableAsteroid>();
         }
 
         BuildDysonSatellites(layout);
@@ -347,6 +359,108 @@ public class StarSystemGenerator : MonoBehaviour
         }
     }
 
+
+private static List<ResourceStack> PlanetResourcesForBody(CelestialBodyType bodyType, System.Random random, bool isMainPlanet)
+{
+    List<ResourceStack> resources = new List<ResourceStack>();
+
+    if (isMainPlanet)
+    {
+        resources.Add(new ResourceStack(ResourceType.Ore, random.Next(2200, 3600)));
+        resources.Add(new ResourceStack(ResourceType.Ice, random.Next(2200, 3600)));
+        resources.Add(new ResourceStack(ResourceType.Silicate, random.Next(2200, 3600)));
+        resources.Add(new ResourceStack(ResourceType.Copper, random.Next(2200, 3600)));
+        resources.Add(new ResourceStack(ResourceType.Biomass, random.Next(2200, 3600)));
+        return resources;
+    }
+
+    switch (bodyType)
+    {
+        case CelestialBodyType.IceMoon:
+            AddPlanetResource(resources, ResourceType.Ice, random.Next(1200, 2600));
+
+            if (random.Next(0, 100) < 45)
+            {
+                AddPlanetResource(resources, ResourceType.Silicate, random.Next(700, 1800));
+            }
+
+            if (random.Next(0, 100) < 20)
+            {
+                AddPlanetResource(resources, ResourceType.Ore, random.Next(500, 1400));
+            }
+
+            break;
+
+        case CelestialBodyType.MetallicBody:
+            AddPlanetResource(resources, ResourceType.Ore, random.Next(1000, 2400));
+
+            if (random.Next(0, 100) < 65)
+            {
+                AddPlanetResource(resources, ResourceType.Copper, random.Next(800, 2200));
+            }
+
+            if (random.Next(0, 100) < 45)
+            {
+                AddPlanetResource(resources, ResourceType.Silicate, random.Next(700, 1800));
+            }
+
+            break;
+
+        case CelestialBodyType.RockyPlanet:
+            AddPlanetResource(resources, ResourceType.Ore, random.Next(800, 2200));
+
+            if (random.Next(0, 100) < 70)
+            {
+                AddPlanetResource(resources, ResourceType.Silicate, random.Next(800, 2200));
+            }
+
+            if (random.Next(0, 100) < 35)
+            {
+                AddPlanetResource(resources, ResourceType.Biomass, random.Next(500, 1600));
+            }
+
+            if (random.Next(0, 100) < 25)
+            {
+                AddPlanetResource(resources, ResourceType.Ice, random.Next(500, 1500));
+            }
+
+            break;
+
+        default:
+            AddPlanetResource(resources, ResourceForBody(bodyType, random), random.Next(800, 2200));
+            break;
+    }
+
+    if (resources.Count <= 0)
+    {
+        AddPlanetResource(resources, ResourceType.Ore, random.Next(800, 2200));
+    }
+
+    return resources;
+}
+
+private static void AddPlanetResource(List<ResourceStack> resources, ResourceType type, int amount)
+{
+    if (resources == null || amount <= 0)
+    {
+        return;
+    }
+
+    for (int i = 0; i < resources.Count; i++)
+    {
+        if (resources[i].type != type)
+        {
+            continue;
+        }
+
+        ResourceStack stack = resources[i];
+        stack.amount += amount;
+        resources[i] = stack;
+        return;
+    }
+
+    resources.Add(new ResourceStack(type, amount));
+}
     private static ResourceType ResourceForBody(CelestialBodyType bodyType, System.Random random)
     {
         switch (bodyType)

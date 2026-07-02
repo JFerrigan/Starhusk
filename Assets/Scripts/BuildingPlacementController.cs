@@ -118,20 +118,25 @@ public class BuildingPlacementController : MonoBehaviour
     {
         BeginMove(mine);
     }
-
-    public void BeginMove(PlanetResourceExtractorBuilding building)
+public void BeginMove(PlanetResourceExtractorBuilding building)
+{
+    if (building == null)
     {
-        if (building == null)
-        {
-            return;
-        }
-
-        placementMode = PlacementMode.MoveBuilding;
-        activeBuildingType = building.buildingType;
-        movingBuilding = building;
-        waitingForMouseRelease = Mouse.current != null && Mouse.current.leftButton.isPressed;
-        EnsureGhost(activeBuildingType);
+        return;
     }
+
+    BuildingSelectionController selectionController = FindFirstObjectByType<BuildingSelectionController>();
+    if (selectionController != null)
+    {
+        selectionController.ClearSelection();
+    }
+
+    placementMode = PlacementMode.MoveBuilding;
+    activeBuildingType = building.buildingType;
+    movingBuilding = building;
+    waitingForMouseRelease = Mouse.current != null && Mouse.current.leftButton.isPressed;
+    EnsureGhost(activeBuildingType);
+}
 
     public static bool IsValidMinePlacementTarget(ResourceDeposit deposit)
     {
@@ -143,20 +148,26 @@ public class BuildingPlacementController : MonoBehaviour
         return BuildingCatalog.IsValidPlacementTarget(buildingType, deposit);
     }
 
-    private void TogglePlacement(BuildingType buildingType)
+ private void TogglePlacement(BuildingType buildingType)
+{
+    if (placementMode == PlacementMode.PlaceBuilding && movingBuilding == null && activeBuildingType == buildingType)
     {
-        if (placementMode == PlacementMode.PlaceBuilding && movingBuilding == null && activeBuildingType == buildingType)
-        {
-            CancelPlacement();
-            return;
-        }
-
-        placementMode = PlacementMode.PlaceBuilding;
-        activeBuildingType = buildingType;
-        movingBuilding = null;
-        waitingForMouseRelease = Mouse.current != null && Mouse.current.leftButton.isPressed;
-        EnsureGhost(buildingType);
+        CancelPlacement();
+        return;
     }
+
+    BuildingSelectionController selectionController = FindFirstObjectByType<BuildingSelectionController>();
+    if (selectionController != null)
+    {
+        selectionController.ClearSelection();
+    }
+
+    placementMode = PlacementMode.PlaceBuilding;
+    activeBuildingType = buildingType;
+    movingBuilding = null;
+    waitingForMouseRelease = Mouse.current != null && Mouse.current.leftButton.isPressed;
+    EnsureGhost(buildingType);
+}
 
     private void ConfirmPlacement(ResourceDeposit deposit, Transform planetTransform, Vector2 surfaceNormal)
     {
@@ -255,25 +266,30 @@ public class BuildingPlacementController : MonoBehaviour
         return false;
     }
 
-    private bool IsPlacementAllowedAtTarget(ResourceDeposit targetDeposit)
+   private bool IsPlacementAllowedAtTarget(ResourceDeposit targetDeposit)
+{
+    if (targetDeposit == null)
     {
-        if (targetDeposit == null)
-        {
-            return false;
-        }
-
-        if (!BuildingCatalog.IsValidPlacementTarget(activeBuildingType, targetDeposit))
-        {
-            return false;
-        }
-
-        if (placementMode == PlacementMode.MoveBuilding && movingBuilding != null && !movingBuilding.CanRelocateTo(targetDeposit))
-        {
-            return false;
-        }
-
-        return true;
+        return false;
     }
+
+    if (!BuildingCatalog.IsValidPlacementTarget(activeBuildingType, targetDeposit))
+    {
+        return false;
+    }
+
+    if (!BuildingCatalog.CanPlaceOnDeposit(activeBuildingType, targetDeposit))
+    {
+        return false;
+    }
+
+    if (placementMode == PlacementMode.MoveBuilding && movingBuilding != null && !movingBuilding.CanRelocateTo(targetDeposit))
+    {
+        return false;
+    }
+
+    return true;
+}
 
     private Vector2 CursorWorldPosition()
     {

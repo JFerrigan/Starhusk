@@ -31,6 +31,7 @@ public struct CelestialBodyDefinition
     public float radius;
     public ResourceType primaryResource;
     public int resourceAmount;
+    public List<ResourceStack> resources;
     public bool discoveredAtStart;
 }
 

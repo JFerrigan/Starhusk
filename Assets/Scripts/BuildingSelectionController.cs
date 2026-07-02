@@ -142,6 +142,27 @@ public class BuildingSelectionController : MonoBehaviour
         SetSelectedObject(null, null, null, null, null);
     }
 
+public void ClearSelection()
+{
+    if (selectedBuilding != null)
+    {
+        selectedBuilding.SetSelected(false);
+    }
+
+    if (selectedRenderer != null && hasSelectedRendererBaseColor)
+    {
+        selectedRenderer.color = selectedRendererBaseColor;
+    }
+
+    selectedObject = null;
+    selectedBuilding = null;
+    selectedCollector = null;
+    selectedHub = null;
+    selectedStorage = null;
+    selectedRenderer = null;
+    hasSelectedRendererBaseColor = false;
+}
+
     private void SetSelectedObject(GameObject targetObject, PlacedBuilding building, CollectorAutomaton collector, CollectorHub hub, ResourceStorage storage)
     {
         if (selectedObject == targetObject)

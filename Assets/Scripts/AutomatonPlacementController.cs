@@ -86,18 +86,24 @@ public class AutomatonPlacementController : MonoBehaviour
         }
     }
 
-    private void TogglePlacement(PlacementMode mode)
+   private void TogglePlacement(PlacementMode mode)
+{
+    if (placementMode == mode)
     {
-        if (placementMode == mode)
-        {
-            CancelPlacement();
-            return;
-        }
-
-        placementMode = mode;
-        waitingForMouseRelease = Mouse.current != null && Mouse.current.leftButton.isPressed;
-        EnsureGhost();
+        CancelPlacement();
+        return;
     }
+
+    BuildingSelectionController selectionController = FindFirstObjectByType<BuildingSelectionController>();
+    if (selectionController != null)
+    {
+        selectionController.ClearSelection();
+    }
+
+    placementMode = mode;
+    waitingForMouseRelease = Mouse.current != null && Mouse.current.leftButton.isPressed;
+    EnsureGhost();
+}
 
     private void SpawnCurrent(Vector2 worldPosition)
     {

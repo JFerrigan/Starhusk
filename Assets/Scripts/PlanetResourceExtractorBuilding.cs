@@ -80,19 +80,24 @@ public abstract class PlanetResourceExtractorBuilding : PlacedBuilding
     }
 
     public bool CanRelocateTo(ResourceDeposit deposit)
+{
+    if (!BuildingCatalog.IsValidPlacementTarget(ExtractorType, deposit))
     {
-        if (!BuildingCatalog.IsValidPlacementTarget(ExtractorType, deposit))
-        {
-            return false;
-        }
-
-        if (storage == null || storage.IsEmpty)
-        {
-            return true;
-        }
-
-        return storage.ResourceType == deposit.resourceType;
+        return false;
     }
+
+    if (!BuildingCatalog.CanPlaceOnDeposit(ExtractorType, deposit))
+    {
+        return false;
+    }
+
+    if (storage == null || storage.IsEmpty)
+    {
+        return true;
+    }
+
+    return storage.ResourceType == PreferredResourceType;
+}
 
     public bool BindToPlanet(ResourceDeposit deposit, Transform planetTransform, Vector2 surfaceNormal)
     {
@@ -121,28 +126,41 @@ public abstract class PlanetResourceExtractorBuilding : PlacedBuilding
     }
 
     public int ExtractOnce()
+{
+    if (sourceDeposit == null || storage == null || storage.IsFull || sourceDeposit.IsDepleted)
     {
-        if (sourceDeposit == null || storage == null || storage.IsFull || sourceDeposit.IsDepleted)
-        {
-            return 0;
-        }
-
-        if (!storage.CanStore(sourceDeposit.resourceType))
-        {
-            return 0;
-        }
-
-        int amountToExtract = Mathf.Min(Definition.extractAmountPerTick, sourceDeposit.remainingAmount);
-        int storedAmount = storage.AddResource(sourceDeposit.resourceType, amountToExtract);
-
-        if (storedAmount <= 0)
-        {
-            return 0;
-        }
-
-        sourceDeposit.remainingAmount -= storedAmount;
-        return storedAmount;
+        return 0;
     }
+
+    ResourceType resourceToExtract = PreferredResourceType;
+
+    if (!sourceDeposit.HasResource(resourceToExtract))
+    {
+        return 0;
+    }
+
+    if (!storage.CanStore(resourceToExtract))
+    {
+        return 0;
+    }
+
+    int remainingStorageSpace = Mathf.Max(0, storage.Capacity - storage.CurrentAmount);
+    int amountToExtract = Mathf.Min(
+        Definition.extractAmountPerTick,
+        sourceDeposit.GetAmount(resourceToExtract),
+        remainingStorageSpace
+    );
+
+    if (amountToExtract <= 0)
+    {
+        return 0;
+    }
+
+    int removedAmount = sourceDeposit.RemoveResource(resourceToExtract, amountToExtract);
+    int storedAmount = storage.AddResource(resourceToExtract, removedAmount);
+
+    return storedAmount;
+}
 
     private void EnsureReferences()
     {
@@ -157,16 +175,11 @@ public abstract class PlanetResourceExtractorBuilding : PlacedBuilding
         }
     }
 
-    private ResourceType PreferredResourceType
+   private ResourceType PreferredResourceType
+{
+    get
     {
-        get
-        {
-            if (Definition.requiredResourceType.HasValue)
-            {
-                return Definition.requiredResourceType.Value;
-            }
-
-            return sourceDeposit != null ? sourceDeposit.resourceType : ResourceType.Ore;
-        }
+        return BuildingCatalog.RequiredResourceFor(ExtractorType);
     }
+}
 }
