@@ -438,7 +438,7 @@ MonoBehaviour:
   asteroidFieldCount: 3
   asteroidsPerField: 16
   stationaryDysonSatelliteCount: 2
-  dynamicDysonSatelliteCount: 80
+  dynamicDysonSatelliteCount: 1
   celestialScaleMultiplier: 10
   generatedRoot: {fileID: 0}
 --- !u!4 &569060923

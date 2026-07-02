@@ -14,6 +14,7 @@ public static class PlaceholderSprites
     private static Sprite dredger;
     private static Sprite collectorAutomaton;
     private static Sprite collectorHub;
+    private static Sprite satelliteFactory;
 
     public static Sprite Pixel
     {
@@ -578,6 +579,55 @@ public static class PlaceholderSprites
             }
 
             return collectorHub;
+        }
+    }
+
+    public static Sprite SatelliteFactory
+    {
+        get
+        {
+            if (satelliteFactory == null)
+            {
+                const int size = 96;
+                Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+                texture.name = "Runtime Placeholder Satellite Factory";
+                texture.filterMode = FilterMode.Point;
+                texture.wrapMode = TextureWrapMode.Clamp;
+
+                for (int y = 0; y < size; y++)
+                {
+                    for (int x = 0; x < size; x++)
+                    {
+                        texture.SetPixel(x, y, Color.clear);
+                    }
+                }
+
+                Color frame = new Color(0.74f, 0.92f, 1f, 1f);
+                Color body = new Color(0.24f, 0.4f, 0.58f, 1f);
+                Color dark = new Color(0.08f, 0.14f, 0.22f, 1f);
+                Color glow = new Color(0.35f, 1f, 0.95f, 1f);
+
+                FillRect(texture, 20, 24, 56, 44, body);
+                FillRect(texture, 26, 18, 44, 8, frame);
+                FillRect(texture, 26, 68, 44, 8, frame);
+                FillRect(texture, 34, 34, 28, 24, dark);
+                FillRect(texture, 40, 40, 16, 12, glow);
+                FillRect(texture, 14, 38, 10, 16, frame);
+                FillRect(texture, 72, 38, 10, 16, frame);
+                FillRect(texture, 44, 10, 8, 10, glow);
+                FillRect(texture, 44, 76, 8, 10, glow);
+
+                texture.Apply();
+
+                satelliteFactory = Sprite.Create(
+                    texture,
+                    new Rect(0f, 0f, size, size),
+                    new Vector2(0.5f, 0.5f),
+                    size
+                );
+            }
+
+            return satelliteFactory;
         }
     }
 

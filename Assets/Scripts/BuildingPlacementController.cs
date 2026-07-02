@@ -148,6 +148,11 @@ public void BeginMove(PlanetResourceExtractorBuilding building)
         return BuildingCatalog.IsValidPlacementTarget(buildingType, deposit);
     }
 
+    public void BeginPlacement(BuildingType buildingType)
+    {
+        TogglePlacement(buildingType);
+    }
+
  private void TogglePlacement(BuildingType buildingType)
 {
     if (placementMode == PlacementMode.PlaceBuilding && movingBuilding == null && activeBuildingType == buildingType)
@@ -180,6 +185,11 @@ public void BeginMove(PlanetResourceExtractorBuilding building)
         }
         else
         {
+            if (!BuildResourcePool.Spend(BuildingCatalog.GetDefinition(activeBuildingType).buildCost))
+            {
+                return;
+            }
+
             SpawnBuilding(activeBuildingType, deposit, planetTransform, surfaceNormal);
         }
 
@@ -190,7 +200,9 @@ public void BeginMove(PlanetResourceExtractorBuilding building)
     private void SpawnBuilding(BuildingType buildingType, ResourceDeposit deposit, Transform planetTransform, Vector2 surfaceNormal)
     {
         BuildingDefinition definition = BuildingCatalog.GetDefinition(buildingType);
-        GameObject buildingObject = new GameObject(definition.displayName);
+        string displayName = ObjectNamer.NumberedManMadeName(definition.displayName);
+        GameObject buildingObject = new GameObject(displayName);
+        ObjectNamer.AssignIdentity(buildingObject, displayName, ObjectIdentityCategory.ManMade);
         buildingObject.transform.localScale = Vector3.one * definition.visualScale;
 
         StarSystemGenerator generator = FindFirstObjectByType<StarSystemGenerator>();
@@ -288,6 +300,11 @@ public void BeginMove(PlanetResourceExtractorBuilding building)
         return false;
     }
 
+    if (placementMode == PlacementMode.PlaceBuilding && !BuildResourcePool.CanAfford(BuildingCatalog.GetDefinition(activeBuildingType).buildCost))
+    {
+        return false;
+    }
+
     return true;
 }
 
@@ -331,8 +348,9 @@ public void BeginMove(PlanetResourceExtractorBuilding building)
 
         PlanetSurfaceAnchor.ApplySurfacePose(ghostObject.transform, planetTransform, surfaceNormal, ghostObject.transform.position.z);
         Color tint = BuildingCatalog.GetDefinition(activeBuildingType).tint;
-        float alpha = canPlaceHere ? ghostAlpha : Mathf.Clamp01(ghostAlpha * 0.9f);
-        ghostRenderer.color = new Color(tint.r, tint.g, tint.b, alpha);
+        ghostRenderer.color = canPlaceHere
+            ? new Color(tint.r, tint.g, tint.b, ghostAlpha)
+            : new Color(1f, 0.24f, 0.2f, Mathf.Clamp01(ghostAlpha * 0.95f));
     }
 
     private void EnsureGhost(BuildingType buildingType)

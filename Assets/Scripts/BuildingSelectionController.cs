@@ -5,7 +5,10 @@ using UnityEngine.InputSystem;
 public class BuildingSelectionController : MonoBehaviour
 {
     private const float PanelWidth = 220f;
+    private const float FreighterPanelWidth = 380f;
     private const float BasePanelHeight = 116f;
+    private const float FreighterPanelHeight = 420f;
+    private const float HeaderHeight = 28f;
 
     private Texture2D pixel;
     private GUIStyle titleStyle;
@@ -13,12 +16,23 @@ public class BuildingSelectionController : MonoBehaviour
     private Rect panelRect;
     private PlacedBuilding selectedBuilding;
     private CollectorAutomaton selectedCollector;
+    private FreighterAutomaton selectedFreighter;
+    private SatelliteFactory selectedSatelliteFactory;
     private CollectorHub selectedHub;
     private ResourceStorage selectedStorage;
     private GameObject selectedObject;
     private SpriteRenderer selectedRenderer;
     private Color selectedRendererBaseColor;
     private bool hasSelectedRendererBaseColor;
+    private bool sourceDropdownOpen;
+    private bool destinationDropdownOpen;
+    private bool cargoPriorityDropdownOpen;
+    private Vector2 sourceScrollPosition;
+    private Vector2 destinationScrollPosition;
+    private Vector2 panelPosition;
+    private bool hasPanelPosition;
+    private bool draggingPanel;
+    private Vector2 dragOffset;
 
     private void Awake()
     {
@@ -58,6 +72,11 @@ public class BuildingSelectionController : MonoBehaviour
             return;
         }
 
+        if (PointerOverBuildMenu())
+        {
+            return;
+        }
+
         SelectAtPointer();
     }
 
@@ -69,7 +88,11 @@ public class BuildingSelectionController : MonoBehaviour
         }
 
         float panelHeight = PanelHeight();
-        panelRect = new Rect(12f, Screen.height - panelHeight - 12f, PanelWidth, panelHeight);
+        float panelWidth = PanelWidthForSelection();
+        EnsurePanelPosition(panelWidth, panelHeight);
+        panelRect = new Rect(panelPosition.x, panelPosition.y, panelWidth, panelHeight);
+        HandlePanelDrag();
+
         DrawRect(panelRect, new Color(0f, 0f, 0f, 0.78f));
         DrawRectOutline(panelRect, new Color(0.24f, 0.84f, 0.95f, 0.95f), 2f);
 
@@ -82,6 +105,18 @@ public class BuildingSelectionController : MonoBehaviour
         if (selectedCollector != null)
         {
             DrawCollectorPanel(selectedCollector);
+            return;
+        }
+
+        if (selectedFreighter != null)
+        {
+            DrawFreighterPanel(selectedFreighter);
+            return;
+        }
+
+        if (selectedSatelliteFactory != null)
+        {
+            DrawSatelliteFactoryPanel(selectedSatelliteFactory);
             return;
         }
 
@@ -113,34 +148,58 @@ public class BuildingSelectionController : MonoBehaviour
             PlacedBuilding building = hits[i].GetComponentInParent<PlacedBuilding>();
             if (building != null)
             {
-                SetSelectedObject(building.gameObject, building, null, null, null);
+                SetSelectedObject(building.gameObject, building, null, null, null, null, null);
                 return;
             }
 
             CollectorAutomaton collector = hits[i].GetComponentInParent<CollectorAutomaton>();
             if (collector != null)
             {
-                SetSelectedObject(collector.gameObject, null, collector, null, collector.Cargo);
+                SetSelectedObject(collector.gameObject, null, collector, null, null, null, collector.Cargo);
+                return;
+            }
+
+            FreighterAutomaton freighter = hits[i].GetComponentInParent<FreighterAutomaton>();
+            if (freighter != null)
+            {
+                SetSelectedObject(freighter.gameObject, null, null, freighter, null, null, freighter.Cargo);
+                return;
+            }
+
+            SatelliteFactory satelliteFactory = hits[i].GetComponentInParent<SatelliteFactory>();
+            if (satelliteFactory != null)
+            {
+                SetSelectedObject(satelliteFactory.gameObject, null, null, null, satelliteFactory, null, satelliteFactory.Storage);
                 return;
             }
 
             CollectorHub hub = hits[i].GetComponentInParent<CollectorHub>();
             if (hub != null)
             {
-                SetSelectedObject(hub.gameObject, null, null, hub, hub.Storage);
+                SetSelectedObject(hub.gameObject, null, null, null, null, hub, hub.Storage);
                 return;
             }
 
             ResourceStorage storage = hits[i].GetComponentInParent<ResourceStorage>();
             if (storage != null)
             {
-                SetSelectedObject(storage.gameObject, null, null, null, storage);
+                SetSelectedObject(storage.gameObject, null, null, null, null, null, storage);
                 return;
             }
         }
 
-        SetSelectedObject(null, null, null, null, null);
+        SetSelectedObject(null, null, null, null, null, null, null);
     }
+
+public void SelectFreighter(FreighterAutomaton freighter)
+{
+    if (freighter == null)
+    {
+        return;
+    }
+
+    SetSelectedObject(freighter.gameObject, null, null, freighter, null, null, freighter.Cargo);
+}
 
 public void ClearSelection()
 {
@@ -157,13 +216,18 @@ public void ClearSelection()
     selectedObject = null;
     selectedBuilding = null;
     selectedCollector = null;
+    selectedFreighter = null;
+    selectedSatelliteFactory = null;
     selectedHub = null;
     selectedStorage = null;
     selectedRenderer = null;
     hasSelectedRendererBaseColor = false;
+    sourceDropdownOpen = false;
+    destinationDropdownOpen = false;
+    cargoPriorityDropdownOpen = false;
 }
 
-    private void SetSelectedObject(GameObject targetObject, PlacedBuilding building, CollectorAutomaton collector, CollectorHub hub, ResourceStorage storage)
+    private void SetSelectedObject(GameObject targetObject, PlacedBuilding building, CollectorAutomaton collector, FreighterAutomaton freighter, SatelliteFactory satelliteFactory, CollectorHub hub, ResourceStorage storage)
     {
         if (selectedObject == targetObject)
         {
@@ -183,10 +247,15 @@ public void ClearSelection()
         selectedObject = targetObject;
         selectedBuilding = building;
         selectedCollector = collector;
+        selectedFreighter = freighter;
+        selectedSatelliteFactory = satelliteFactory;
         selectedHub = hub;
         selectedStorage = storage;
         selectedRenderer = null;
         hasSelectedRendererBaseColor = false;
+        sourceDropdownOpen = false;
+        destinationDropdownOpen = false;
+        cargoPriorityDropdownOpen = false;
 
         if (selectedBuilding != null)
         {
@@ -224,6 +293,56 @@ public void ClearSelection()
         return panelRect.Contains(guiPosition);
     }
 
+    private bool PointerOverBuildMenu()
+    {
+        if (Mouse.current == null)
+        {
+            return false;
+        }
+
+        Vector2 position = Mouse.current.position.ReadValue();
+        Vector2 guiPosition = new Vector2(position.x, Screen.height - position.y);
+        return BuildOptionsMenu.ContainsGuiPoint(guiPosition);
+    }
+
+    private void EnsurePanelPosition(float panelWidth, float panelHeight)
+    {
+        if (!hasPanelPosition)
+        {
+            panelPosition = new Vector2(12f, Screen.height - panelHeight - 12f);
+            hasPanelPosition = true;
+            return;
+        }
+
+        panelPosition = ClampToScreen(panelPosition, new Vector2(panelWidth, panelHeight));
+    }
+
+    private void HandlePanelDrag()
+    {
+        Event current = Event.current;
+        if (current == null)
+        {
+            return;
+        }
+
+        Rect dragRect = new Rect(panelRect.x, panelRect.y, panelRect.width, HeaderHeight);
+        if (current.type == EventType.MouseDown && current.button == 0 && dragRect.Contains(current.mousePosition))
+        {
+            draggingPanel = true;
+            dragOffset = current.mousePosition - panelPosition;
+            current.Use();
+        }
+        else if (current.type == EventType.MouseDrag && draggingPanel)
+        {
+            panelPosition = ClampToScreen(current.mousePosition - dragOffset, panelRect.size);
+            current.Use();
+        }
+        else if (current.type == EventType.MouseUp && current.button == 0)
+        {
+            draggingPanel = false;
+        }
+    }
+
     private void DrawExtractorPanel(PlanetResourceExtractorBuilding extractor)
     {
         GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 10f, 170f, 20f), extractor.DisplayName, titleStyle);
@@ -250,6 +369,145 @@ public void ClearSelection()
         GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 36f, 190f, 18f), "Goal: " + collector.goal, bodyStyle);
         GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 56f, 190f, 18f), "State: " + collector.State, bodyStyle);
         DrawStorageContents(collector.Cargo, panelRect.y + 80f);
+    }
+
+    private void DrawFreighterPanel(FreighterAutomaton freighter)
+    {
+        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 10f, panelRect.width - 24f, 20f), selectedObject.name, titleStyle);
+        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 36f, panelRect.width - 24f, 18f), "State: " + freighter.State, bodyStyle);
+        DrawStorageContents(freighter.Cargo, panelRect.y + 60f);
+
+        float dropdownY = panelRect.y + 138f + (ResourceLineCount(freighter.Cargo) * 18f);
+        DrawStorageDropdown(
+            new Rect(panelRect.x + 12f, dropdownY, panelRect.width - 24f, 28f),
+            "Source",
+            freighter,
+            freighter.SourceStorage,
+            true);
+
+        DrawStorageDropdown(
+            new Rect(panelRect.x + 12f, dropdownY + 132f, panelRect.width - 24f, 28f),
+            "Destination",
+            freighter,
+            freighter.DestinationStorage,
+            false);
+
+        DrawCargoPriorityDropdown(
+            new Rect(panelRect.x + 12f, dropdownY + 264f, panelRect.width - 24f, 28f),
+            freighter);
+    }
+
+    private void DrawCargoPriorityDropdown(Rect rect, FreighterAutomaton freighter)
+    {
+        GUI.Label(new Rect(rect.x, rect.y - 18f, rect.width, 18f), "Cargo Priority", bodyStyle);
+
+        if (GUI.Button(rect, freighter.cargoPriority.ToString()))
+        {
+            cargoPriorityDropdownOpen = !cargoPriorityDropdownOpen;
+            sourceDropdownOpen = false;
+            destinationDropdownOpen = false;
+        }
+
+        if (!cargoPriorityDropdownOpen)
+        {
+            return;
+        }
+
+        FreighterCargoPriority[] priorities = (FreighterCargoPriority[])System.Enum.GetValues(typeof(FreighterCargoPriority));
+        Rect listRect = new Rect(rect.x, rect.y + rect.height + 2f, rect.width, 120f);
+
+        DrawRect(listRect, new Color(0.02f, 0.03f, 0.04f, 0.96f));
+        DrawRectOutline(listRect, new Color(0.24f, 0.84f, 0.95f, 0.95f), 1f);
+
+        for (int i = 0; i < priorities.Length; i++)
+        {
+            if (GUI.Button(new Rect(listRect.x, listRect.y + (i * 20f), listRect.width, 20f), priorities[i].ToString()))
+            {
+                freighter.SetCargoPriority(priorities[i]);
+                cargoPriorityDropdownOpen = false;
+            }
+        }
+    }
+
+    private void DrawSatelliteFactoryPanel(SatelliteFactory factory)
+    {
+        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 10f, panelRect.width - 24f, 20f), selectedObject.name, titleStyle);
+        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 36f, panelRect.width - 24f, 18f), "Produced: " + factory.ProducedCount, bodyStyle);
+        GUI.Label(
+            new Rect(panelRect.x + 12f, panelRect.y + 56f, panelRect.width - 24f, 18f),
+            factory.IsBuilding
+                ? "Building: " + Mathf.RoundToInt(factory.BuildProgress * 100f) + "%  " + factory.BuildTimeRemaining.ToString("0.0") + "s"
+                : "Building: Waiting for resources",
+            bodyStyle
+        );
+
+        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 82f, panelRect.width - 24f, 18f), "Recipe: 25 Ore, 25 Copper, 25 Silicate", bodyStyle);
+        DrawStorageContents(factory.Storage, panelRect.y + 108f);
+    }
+
+    private void DrawStorageDropdown(Rect rect, string label, FreighterAutomaton freighter, ResourceStorage selectedStorageValue, bool isSource)
+    {
+        GUI.Label(new Rect(rect.x, rect.y - 18f, rect.width, 18f), label, bodyStyle);
+
+        bool isOpen = isSource ? sourceDropdownOpen : destinationDropdownOpen;
+        if (GUI.Button(rect, StorageLabel(selectedStorageValue)))
+        {
+            sourceDropdownOpen = isSource ? !sourceDropdownOpen : false;
+            destinationDropdownOpen = isSource ? false : !destinationDropdownOpen;
+            cargoPriorityDropdownOpen = false;
+        }
+
+        if (!isOpen)
+        {
+            return;
+        }
+
+        ResourceStorage[] storages = FindObjectsByType<ResourceStorage>(FindObjectsSortMode.None);
+        Rect listRect = new Rect(rect.x, rect.y + rect.height + 2f, rect.width, 96f);
+        Rect contentRect = new Rect(0f, 0f, rect.width - 18f, Mathf.Max(96f, storages.Length * 26f));
+        Vector2 scrollPosition = isSource ? sourceScrollPosition : destinationScrollPosition;
+
+        DrawRect(listRect, new Color(0.02f, 0.03f, 0.04f, 0.96f));
+        DrawRectOutline(listRect, new Color(0.24f, 0.84f, 0.95f, 0.95f), 1f);
+
+        scrollPosition = GUI.BeginScrollView(listRect, scrollPosition, contentRect);
+
+        float y = 0f;
+        for (int i = 0; i < storages.Length; i++)
+        {
+            ResourceStorage storage = storages[i];
+            if (!IsSelectableFreighterStorage(freighter, storage, isSource))
+            {
+                continue;
+            }
+
+            if (GUI.Button(new Rect(0f, y, contentRect.width, 24f), StorageLabel(storage)))
+            {
+                if (isSource)
+                {
+                    freighter.AssignEndpoints(storage, freighter.DestinationStorage);
+                    sourceDropdownOpen = false;
+                }
+                else
+                {
+                    freighter.AssignEndpoints(freighter.SourceStorage, storage);
+                    destinationDropdownOpen = false;
+                }
+            }
+
+            y += 26f;
+        }
+
+        GUI.EndScrollView();
+
+        if (isSource)
+        {
+            sourceScrollPosition = scrollPosition;
+        }
+        else
+        {
+            destinationScrollPosition = scrollPosition;
+        }
     }
 
     private void DrawStoragePanel(string title, ResourceStorage storage, float contentY)
@@ -292,6 +550,16 @@ public void ClearSelection()
 
     private float PanelHeight()
     {
+        if (selectedFreighter != null)
+        {
+            return Mathf.Max(FreighterPanelHeight + 130f, 420f + (ResourceLineCount(selectedFreighter.Cargo) * 18f));
+        }
+
+        if (selectedSatelliteFactory != null)
+        {
+            return Mathf.Max(220f, 128f + (ResourceLineCount(selectedSatelliteFactory.Storage) * 18f));
+        }
+
         if (selectedCollector != null)
         {
             return Mathf.Max(BasePanelHeight, 124f + (ResourceLineCount(selectedCollector.Cargo) * 18f));
@@ -308,6 +576,38 @@ public void ClearSelection()
         }
 
         return BasePanelHeight;
+    }
+
+    private float PanelWidthForSelection()
+    {
+        return selectedFreighter == null ? PanelWidth : FreighterPanelWidth;
+    }
+
+    private static bool IsSelectableFreighterStorage(FreighterAutomaton freighter, ResourceStorage storage, bool isSource)
+    {
+        if (freighter == null || storage == null || storage == freighter.Cargo)
+        {
+            return false;
+        }
+
+        if (isSource)
+        {
+            return storage != freighter.DestinationStorage;
+        }
+
+        return storage != freighter.SourceStorage;
+    }
+
+    private static string StorageLabel(ResourceStorage storage)
+    {
+        if (storage == null)
+        {
+            return "None";
+        }
+
+        ObjectIdentity identity = storage.GetComponent<ObjectIdentity>();
+        string storageName = identity == null ? storage.name : identity.HoverName;
+        return storageName + " (" + storage.TotalAmount + " / " + storage.Capacity + ")";
     }
 
     private static int ResourceLineCount(ResourceStorage storage)
@@ -334,5 +634,12 @@ public void ClearSelection()
         DrawRect(new Rect(rect.xMin, rect.yMax - thickness, rect.width, thickness), color);
         DrawRect(new Rect(rect.xMin, rect.yMin, thickness, rect.height), color);
         DrawRect(new Rect(rect.xMax - thickness, rect.yMin, thickness, rect.height), color);
+    }
+
+    private static Vector2 ClampToScreen(Vector2 position, Vector2 size)
+    {
+        return new Vector2(
+            Mathf.Clamp(position.x, 4f, Mathf.Max(4f, Screen.width - size.x - 4f)),
+            Mathf.Clamp(position.y, 4f, Mathf.Max(4f, Screen.height - size.y - 4f)));
     }
 }

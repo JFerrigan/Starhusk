@@ -22,6 +22,9 @@ public class GameBootstrap : MonoBehaviour
         EnsureCamera();
         EnsureSpaceBackground();
         EnsureMapController();
+        EnsureHoverNameDisplay();
+        EnsureBuildOptionsMenu();
+        HideLegacyResourceUI();
         EnsureBuildingControllers();
         EnsureAutomatonControllers();
     }
@@ -99,6 +102,13 @@ if (renderer.sprite != null)
             inventory.gameObject.AddComponent<PlayerMovement>();
         }
 
+        EnsurePrototypeResources(inventory);
+
+        if (inventory.GetComponent<ObjectIdentity>() == null)
+        {
+            ObjectNamer.AssignIdentity(inventory.gameObject, "Player Ship", ObjectIdentityCategory.ManMade);
+        }
+
         if (inventory.GetComponent<PlayerRadarPing>() == null)
         {
             inventory.gameObject.AddComponent<PlayerRadarPing>();
@@ -116,6 +126,29 @@ if (renderer.sprite != null)
         if (inventory.transform.position.sqrMagnitude < 1f)
         {
             inventory.transform.position = new Vector3(0f, -10f, 0f);
+        }
+    }
+
+    private void EnsurePrototypeResources(ResourceInventory inventory)
+    {
+        EnsureMinimumResource(inventory, ResourceType.Ore, 1000);
+        EnsureMinimumResource(inventory, ResourceType.Ice, 1000);
+        EnsureMinimumResource(inventory, ResourceType.Silicate, 1000);
+        EnsureMinimumResource(inventory, ResourceType.Copper, 1000);
+        EnsureMinimumResource(inventory, ResourceType.Biomass, 1000);
+    }
+
+    private void EnsureMinimumResource(ResourceInventory inventory, ResourceType type, int minimum)
+    {
+        if (inventory == null)
+        {
+            return;
+        }
+
+        int currentAmount = inventory.GetAmount(type);
+        if (currentAmount < minimum)
+        {
+            inventory.AddResource(type, minimum - currentAmount);
         }
     }
 
@@ -189,6 +222,40 @@ if (renderer.sprite != null)
 
         GameObject mapObject = new GameObject("BasicMapController");
         mapObject.AddComponent<BasicMapController>();
+    }
+
+    private void EnsureHoverNameDisplay()
+    {
+        if (FindFirstObjectByType<HoverNameDisplay>() != null)
+        {
+            return;
+        }
+
+        GameObject hoverObject = new GameObject("HoverNameDisplay");
+        hoverObject.AddComponent<HoverNameDisplay>();
+    }
+
+    private void EnsureBuildOptionsMenu()
+    {
+        if (FindFirstObjectByType<BuildOptionsMenu>() != null)
+        {
+            return;
+        }
+
+        GameObject buildOptionsObject = new GameObject("BuildOptionsMenu");
+        buildOptionsObject.AddComponent<BuildOptionsMenu>();
+    }
+
+    private void HideLegacyResourceUI()
+    {
+        ResourceUI[] legacyResourceUis = FindObjectsByType<ResourceUI>(FindObjectsSortMode.None);
+        for (int i = 0; i < legacyResourceUis.Length; i++)
+        {
+            if (legacyResourceUis[i] != null)
+            {
+                legacyResourceUis[i].HideLegacyDisplay();
+            }
+        }
     }
 
     private void EnsureBuildingControllers()

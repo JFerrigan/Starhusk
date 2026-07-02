@@ -63,6 +63,40 @@ public class ResourceInventory : MonoBehaviour
         return 0;
     }
 
+    public int RemoveResource(ResourceType type, int amount)
+    {
+        if (amount <= 0)
+        {
+            return 0;
+        }
+
+        for (int i = 0; i < resources.Count; i++)
+        {
+            ResourceStack stack = resources[i];
+            if (stack.type != type)
+            {
+                continue;
+            }
+
+            int removedAmount = Mathf.Min(amount, Mathf.Max(0, stack.amount));
+            stack.amount -= removedAmount;
+
+            if (stack.amount <= 0)
+            {
+                resources.RemoveAt(i);
+            }
+            else
+            {
+                resources[i] = stack;
+            }
+
+            SyncLegacyFields();
+            return removedAmount;
+        }
+
+        return 0;
+    }
+
     public IReadOnlyList<ResourceStack> GetResources()
     {
         return resources;

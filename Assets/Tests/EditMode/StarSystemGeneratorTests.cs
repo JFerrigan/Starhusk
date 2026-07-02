@@ -149,7 +149,7 @@ public class StarSystemGeneratorTests
         }
 
         Assert.That(stationaryCount, Is.EqualTo(2));
-        Assert.That(dynamicCount, Is.EqualTo(6));
+        Assert.That(dynamicCount, Is.EqualTo(1));
     }
 
     [Test]

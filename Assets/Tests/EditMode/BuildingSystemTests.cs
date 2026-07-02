@@ -189,6 +189,80 @@ public class BuildingSystemTests
         }
     }
 
+    [Test]
+    public void BuildResourcePoolAddsNearbyStorageAndExcludesFarStorage()
+    {
+        GameObject player = new GameObject("Player");
+        GameObject nearbyStorageObject = new GameObject("Nearby Storage");
+        GameObject farStorageObject = new GameObject("Far Storage");
+        GameObject nearbyExtractorObject = new GameObject("Nearby Extractor");
+
+        try
+        {
+            ResourceInventory inventory = player.AddComponent<ResourceInventory>();
+            inventory.AddResource(ResourceType.Ore, 10);
+
+            nearbyStorageObject.transform.position = new Vector3(10f, 0f, 0f);
+            ResourceStorage nearbyStorage = nearbyStorageObject.AddComponent<ResourceStorage>();
+            nearbyStorage.AddResource(ResourceType.Ore, 20);
+
+            farStorageObject.transform.position = new Vector3(300f, 0f, 0f);
+            ResourceStorage farStorage = farStorageObject.AddComponent<ResourceStorage>();
+            farStorage.AddResource(ResourceType.Ore, 100);
+
+            nearbyExtractorObject.transform.position = new Vector3(20f, 0f, 0f);
+            BuildingStorage buildingStorage = nearbyExtractorObject.AddComponent<BuildingStorage>();
+            buildingStorage.Configure(ResourceType.Ore, 100, 30);
+
+            Assert.That(BuildResourcePool.GetAvailable(ResourceType.Ore, inventory, BuildResourcePool.BuildRange), Is.EqualTo(60));
+        }
+        finally
+        {
+            Object.DestroyImmediate(nearbyExtractorObject);
+            Object.DestroyImmediate(farStorageObject);
+            Object.DestroyImmediate(nearbyStorageObject);
+            Object.DestroyImmediate(player);
+        }
+    }
+
+    [Test]
+    public void BuildResourcePoolSpendsInventoryThenNearestStorage()
+    {
+        GameObject player = new GameObject("Player");
+        GameObject nearbyStorageObject = new GameObject("Nearby Storage");
+        GameObject nearbyExtractorObject = new GameObject("Nearby Extractor");
+
+        try
+        {
+            ResourceInventory inventory = player.AddComponent<ResourceInventory>();
+            inventory.AddResource(ResourceType.Ore, 10);
+
+            nearbyStorageObject.transform.position = new Vector3(5f, 0f, 0f);
+            ResourceStorage nearbyStorage = nearbyStorageObject.AddComponent<ResourceStorage>();
+            nearbyStorage.AddResource(ResourceType.Ore, 30);
+
+            nearbyExtractorObject.transform.position = new Vector3(10f, 0f, 0f);
+            BuildingStorage buildingStorage = nearbyExtractorObject.AddComponent<BuildingStorage>();
+            buildingStorage.Configure(ResourceType.Ore, 100, 40);
+
+            bool spent = BuildResourcePool.Spend(
+                new[] { new ResourceStack(ResourceType.Ore, 55) },
+                inventory,
+                BuildResourcePool.BuildRange);
+
+            Assert.IsTrue(spent);
+            Assert.That(inventory.GetAmount(ResourceType.Ore), Is.EqualTo(0));
+            Assert.That(nearbyStorage.GetAmount(ResourceType.Ore), Is.EqualTo(0));
+            Assert.That(buildingStorage.CurrentAmount, Is.EqualTo(25));
+        }
+        finally
+        {
+            Object.DestroyImmediate(nearbyExtractorObject);
+            Object.DestroyImmediate(nearbyStorageObject);
+            Object.DestroyImmediate(player);
+        }
+    }
+
     private static GameObject CreatePlanet(string name, ResourceType resourceType, int amount, bool discovered)
     {
         GameObject planet = new GameObject(name);

@@ -50,6 +50,7 @@ public class StarSystemLayout
 {
     public int seed;
     public StarType starType;
+    public string starName;
     public List<CelestialBodyDefinition> planets = new List<CelestialBodyDefinition>();
     public List<CelestialBodyDefinition> asteroids = new List<CelestialBodyDefinition>();
     public List<DysonSatelliteDefinition> dysonSatellites = new List<DysonSatelliteDefinition>();

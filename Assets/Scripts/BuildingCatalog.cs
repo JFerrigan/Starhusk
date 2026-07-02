@@ -11,6 +11,7 @@ public struct BuildingDefinition
     public int extractAmountPerTick;
     public float extractionInterval;
     public ResourceType? requiredResourceType;
+    public ResourceStack[] buildCost;
 }
 
 public static class BuildingCatalog
@@ -30,7 +31,8 @@ public static class BuildingCatalog
                     capacity = 250,
                     extractAmountPerTick = 5,
                     extractionInterval = 1f,
-                    requiredResourceType = ResourceType.Ice
+                    requiredResourceType = ResourceType.Ice,
+                    buildCost = Cost(new ResourceStack(ResourceType.Ore, 5))
                 };
             case BuildingType.Harvester:
                 return new BuildingDefinition
@@ -43,7 +45,8 @@ public static class BuildingCatalog
                     capacity = 250,
                     extractAmountPerTick = 5,
                     extractionInterval = 1f,
-                    requiredResourceType = ResourceType.Biomass
+                    requiredResourceType = ResourceType.Biomass,
+                    buildCost = Cost(new ResourceStack(ResourceType.Ore, 5))
                 };
             case BuildingType.Dredger:
                 return new BuildingDefinition
@@ -56,7 +59,8 @@ public static class BuildingCatalog
                     capacity = 250,
                     extractAmountPerTick = 5,
                     extractionInterval = 1f,
-                    requiredResourceType = ResourceType.Silicate
+                    requiredResourceType = ResourceType.Silicate,
+                    buildCost = Cost(new ResourceStack(ResourceType.Ore, 5))
                 };
             case BuildingType.Mine:
             default:
@@ -70,7 +74,8 @@ public static class BuildingCatalog
                     capacity = 250,
                     extractAmountPerTick = 5,
                     extractionInterval = 1f,
-                    requiredResourceType = ResourceType.Ore
+                    requiredResourceType = ResourceType.Ore,
+                    buildCost = Cost(new ResourceStack(ResourceType.Ore, 5))
                 };
         }
     }
@@ -121,5 +126,10 @@ public static ResourceType RequiredResourceFor(BuildingType buildingType)
     public static string GetDisplayName(BuildingType buildingType, BuildingTier tier)
     {
         return GetDefinition(buildingType).displayName;
+    }
+
+    private static ResourceStack[] Cost(params ResourceStack[] cost)
+    {
+        return cost;
     }
 }

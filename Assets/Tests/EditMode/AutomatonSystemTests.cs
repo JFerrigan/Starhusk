@@ -520,6 +520,145 @@ public class AutomatonSystemTests
         }
     }
 
+    [Test]
+    public void SatelliteFactoryRequiresFullRecipeBeforeStartingBuild()
+    {
+        GameObject factoryObject = new GameObject("Factory");
+
+        try
+        {
+            SatelliteFactory factory = factoryObject.AddComponent<SatelliteFactory>();
+            factory.Storage.AddResource(ResourceType.Ore, SatelliteFactory.OreCost);
+            factory.Storage.AddResource(ResourceType.Copper, SatelliteFactory.CopperCost);
+
+            Assert.IsFalse(factory.CanStartBuild());
+            Assert.IsFalse(factory.TryStartBuild());
+            Assert.IsFalse(factory.IsBuilding);
+        }
+        finally
+        {
+            Object.DestroyImmediate(factoryObject);
+        }
+    }
+
+    [Test]
+    public void SatelliteFactoryConsumesRecipeAndSpawnsDynamicReflector()
+    {
+        GameObject factoryObject = new GameObject("Factory");
+        factoryObject.transform.position = new Vector3(100f, 0f, 0f);
+
+        try
+        {
+            SatelliteFactory factory = factoryObject.AddComponent<SatelliteFactory>();
+            factory.Storage.AddResource(ResourceType.Ore, SatelliteFactory.OreCost);
+            factory.Storage.AddResource(ResourceType.Copper, SatelliteFactory.CopperCost);
+            factory.Storage.AddResource(ResourceType.Silicate, SatelliteFactory.SilicateCost);
+
+            DysonSatellite satellite = factory.CompleteBuildNow();
+
+            Assert.IsNotNull(satellite);
+            Assert.That(factory.Storage.GetAmount(ResourceType.Ore), Is.EqualTo(0));
+            Assert.That(factory.Storage.GetAmount(ResourceType.Copper), Is.EqualTo(0));
+            Assert.That(factory.Storage.GetAmount(ResourceType.Silicate), Is.EqualTo(0));
+            Assert.That(factory.ProducedCount, Is.EqualTo(1));
+            Assert.That(satellite.mode, Is.EqualTo(DysonSatelliteMode.Dynamic));
+            Assert.That(satellite.orbitRadius, Is.EqualTo(103f).Within(0.001f));
+            Assert.That(satellite.orbitSpeedDegrees, Is.EqualTo(SatelliteFactory.DefaultOrbitSpeedDegrees).Within(0.001f));
+
+            Object.DestroyImmediate(satellite.gameObject);
+        }
+        finally
+        {
+            Object.DestroyImmediate(factoryObject);
+        }
+    }
+
+    [Test]
+    public void SatelliteFactoryPlacementRequiresNearSunAnnulus()
+    {
+        Assert.IsFalse(AutomatonPlacementController.IsValidSatelliteFactoryPosition(new Vector2(5f, 0f)));
+        Assert.IsTrue(AutomatonPlacementController.IsValidSatelliteFactoryPosition(new Vector2(100f, 0f)));
+        Assert.IsFalse(AutomatonPlacementController.IsValidSatelliteFactoryPosition(new Vector2(220f, 0f)));
+    }
+
+    [Test]
+    public void FreighterPriorityLoadsOnlySelectedResource()
+    {
+        GameObject sourceObject = new GameObject("Source");
+        GameObject destinationObject = new GameObject("Destination");
+        GameObject freighterObject = new GameObject("Freighter");
+
+        try
+        {
+            ResourceStorage source = sourceObject.AddComponent<ResourceStorage>();
+            source.Configure(1000);
+            source.AddResource(ResourceType.Ore, 100);
+            source.AddResource(ResourceType.Copper, 100);
+
+            ResourceStorage destination = destinationObject.AddComponent<ResourceStorage>();
+            destination.Configure(1000);
+
+            ResourceStorage cargo = freighterObject.AddComponent<ResourceStorage>();
+            cargo.Configure(1000);
+            FreighterAutomaton freighter = freighterObject.AddComponent<FreighterAutomaton>();
+            freighter.transferAmountPerTrip = 60;
+            freighter.AssignEndpoints(source, destination);
+            freighter.SetCargoPriority(FreighterCargoPriority.Copper);
+
+            freighter.CompleteLoadingForTests();
+
+            Assert.That(freighter.Cargo.GetAmount(ResourceType.Copper), Is.EqualTo(60));
+            Assert.That(freighter.Cargo.GetAmount(ResourceType.Ore), Is.EqualTo(0));
+            Assert.That(source.GetAmount(ResourceType.Copper), Is.EqualTo(40));
+            Assert.That(source.GetAmount(ResourceType.Ore), Is.EqualTo(100));
+        }
+        finally
+        {
+            Object.DestroyImmediate(freighterObject);
+            Object.DestroyImmediate(destinationObject);
+            Object.DestroyImmediate(sourceObject);
+        }
+    }
+
+    [Test]
+    public void FreighterMixedPriorityLoadsEvenShareOfAvailableResources()
+    {
+        GameObject sourceObject = new GameObject("Source");
+        GameObject destinationObject = new GameObject("Destination");
+        GameObject freighterObject = new GameObject("Freighter");
+
+        try
+        {
+            ResourceStorage source = sourceObject.AddComponent<ResourceStorage>();
+            source.Configure(1000);
+            source.AddResource(ResourceType.Ore, 100);
+            source.AddResource(ResourceType.Copper, 100);
+            source.AddResource(ResourceType.Silicate, 100);
+
+            ResourceStorage destination = destinationObject.AddComponent<ResourceStorage>();
+            destination.Configure(1000);
+
+            ResourceStorage cargo = freighterObject.AddComponent<ResourceStorage>();
+            cargo.Configure(1000);
+            FreighterAutomaton freighter = freighterObject.AddComponent<FreighterAutomaton>();
+            freighter.transferAmountPerTrip = 60;
+            freighter.AssignEndpoints(source, destination);
+            freighter.SetCargoPriority(FreighterCargoPriority.Mixed);
+
+            freighter.CompleteLoadingForTests();
+
+            Assert.That(freighter.Cargo.GetAmount(ResourceType.Ore), Is.EqualTo(20));
+            Assert.That(freighter.Cargo.GetAmount(ResourceType.Copper), Is.EqualTo(20));
+            Assert.That(freighter.Cargo.GetAmount(ResourceType.Silicate), Is.EqualTo(20));
+        }
+        finally
+        {
+            Object.DestroyImmediate(freighterObject);
+            Object.DestroyImmediate(destinationObject);
+            Object.DestroyImmediate(sourceObject);
+        }
+    }
+
     private static GameObject CreateExtractor(string name, Vector2 position, int storedAmount)
     {
         GameObject building = new GameObject(name);

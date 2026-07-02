@@ -12,7 +12,7 @@ public class StarSystemGenerator : MonoBehaviour
     public int asteroidFieldCount = 3;
     public int asteroidsPerField = 16;
     public int stationaryDysonSatelliteCount = 2;
-    public int dynamicDysonSatelliteCount = 80;
+    public int dynamicDysonSatelliteCount = 1;
     public float celestialScaleMultiplier = 10f;
     public Transform generatedRoot;
 
@@ -53,13 +53,14 @@ public class StarSystemGenerator : MonoBehaviour
         int asteroidsPerField,
         float worldScaleMultiplier = 1f,
         int stationaryDysonSatelliteCount = 2,
-        int dynamicDysonSatelliteCount = 6)
+        int dynamicDysonSatelliteCount = 1)
     {
         System.Random random = new System.Random(seed);
         StarSystemLayout layout = new StarSystemLayout
         {
             seed = seed,
-            starType = (StarType)random.Next(0, Enum.GetValues(typeof(StarType)).Length)
+            starType = (StarType)random.Next(0, Enum.GetValues(typeof(StarType)).Length),
+            starName = ObjectNamer.StarNameForSeed(seed)
         };
 
         int planetCount = random.Next(minPlanets, maxPlanets + 1);
@@ -82,7 +83,7 @@ public class StarSystemGenerator : MonoBehaviour
 
     layout.planets.Add(new CelestialBodyDefinition
     {
-        name = bodyType + " " + (i + 1),
+        name = ObjectNamer.PlanetNameFor(seed, i),
         bodyType = bodyType,
         position = Direction(angle) * orbitRadius,
         radius = RandomRange(random, 1.8f, 3.5f),
@@ -106,7 +107,7 @@ public class StarSystemGenerator : MonoBehaviour
 
             layout.asteroids.Add(new CelestialBodyDefinition
             {
-                name = "Asteroid " + i,
+                name = "Asteroid " + (i + 1).ToString("000"),
                 bodyType = CelestialBodyType.Asteroid,
                 position = position,
                 radius = RandomRange(random, 0.55f, 1.45f),
@@ -123,7 +124,8 @@ public class StarSystemGenerator : MonoBehaviour
 
     private void BuildLayout(StarSystemLayout layout)
     {
-        BuildSpriteObject("Star", Vector2.zero, 6f * celestialScaleMultiplier, StarColor(layout.starType), true, MapMarkerType.Star, 6f, false);
+        ObjectNamer.ResetManMadeCounters();
+        BuildSpriteObject(layout.starName, Vector2.zero, 6f * celestialScaleMultiplier, StarColor(layout.starType), true, MapMarkerType.Star, 6f, false);
 
         for (int i = 0; i < layout.planets.Count; i++)
         {
@@ -163,6 +165,7 @@ asteroid.AddComponent<MineableAsteroid>();
     private GameObject BuildSpriteObject(string objectName, Vector2 position, float visualRadius, Color color, bool discoveredAtStart, MapMarkerType markerType, float baseRadius, bool colliderIsTrigger = false)
     {
         GameObject instance = new GameObject(objectName);
+        ObjectNamer.AssignIdentity(instance, objectName, ObjectIdentityCategory.Celestial);
         instance.transform.SetParent(generatedRoot);
         instance.transform.position = position;
         instance.transform.localScale = Vector3.one * visualRadius;
@@ -221,7 +224,7 @@ asteroid.AddComponent<MineableAsteroid>();
             float angle = ((float)i / Mathf.Max(1, stationaryCount)) * 360f;
             layout.dysonSatellites.Add(new DysonSatelliteDefinition
             {
-                name = "Dyson Receiver " + i,
+                name = "Dyson Receiver",
                 mode = DysonSatelliteMode.Stationary,
                 position = Direction(angle * Mathf.Deg2Rad) * stationaryOrbitRadius,
                 orbitRadius = stationaryOrbitRadius,
@@ -237,7 +240,7 @@ asteroid.AddComponent<MineableAsteroid>();
             float speed = RandomRange(random, 5f, 10f) * (i % 2 == 0 ? 1f : -1f);
             layout.dysonSatellites.Add(new DysonSatelliteDefinition
             {
-                name = "Dyson Reflector " + i,
+                name = "Dyson Reflector",
                 mode = DysonSatelliteMode.Dynamic,
                 position = Direction(angle * Mathf.Deg2Rad) * dynamicOrbitRadius,
                 orbitRadius = dynamicOrbitRadius,
@@ -284,7 +287,9 @@ asteroid.AddComponent<MineableAsteroid>();
 
     private GameObject BuildDysonSatelliteObject(DysonSatelliteDefinition definition)
     {
-        GameObject instance = new GameObject(definition.name);
+        string displayName = ObjectNamer.NumberedManMadeName(definition.name);
+        GameObject instance = new GameObject(displayName);
+        ObjectNamer.AssignIdentity(instance, displayName, ObjectIdentityCategory.ManMade);
         instance.transform.SetParent(generatedRoot);
         instance.transform.position = definition.position;
         instance.transform.localScale = Vector3.one * 1f;
