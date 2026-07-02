@@ -102,6 +102,11 @@ if (renderer.sprite != null)
             inventory.gameObject.AddComponent<PlayerMovement>();
         }
 
+        if (inventory.GetComponent<PlayerWeaponController>() == null)
+        {
+            inventory.gameObject.AddComponent<PlayerWeaponController>();
+        }
+
         EnsurePrototypeResources(inventory);
 
         if (inventory.GetComponent<ObjectIdentity>() == null)

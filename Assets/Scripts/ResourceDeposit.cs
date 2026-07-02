@@ -56,6 +56,16 @@ public class ResourceDeposit : MonoBehaviour
 
     public void ConfigureResources(IReadOnlyList<ResourceStack> resourceStacks, int mineAmount = 10)
     {
+        ConfigureResourcesInternal(resourceStacks, mineAmount, false);
+    }
+
+    public void ConfigureResourcesExact(IReadOnlyList<ResourceStack> resourceStacks, int mineAmount = 10)
+    {
+        ConfigureResourcesInternal(resourceStacks, mineAmount, true);
+    }
+
+    private void ConfigureResourcesInternal(IReadOnlyList<ResourceStack> resourceStacks, int mineAmount, bool allowEmpty)
+    {
         mineAmountPerInteraction = Mathf.Max(1, mineAmount);
         resources.Clear();
 
@@ -68,12 +78,16 @@ public class ResourceDeposit : MonoBehaviour
             }
         }
 
-        if (resources.Count <= 0)
+        if (resources.Count <= 0 && !allowEmpty)
         {
             resources.Add(new ResourceStack(ResourceType.Ore, 1));
         }
 
-        resourceType = resources[0].type;
+        if (resources.Count > 0)
+        {
+            resourceType = resources[0].type;
+        }
+
         SyncLegacyFields();
     }
 

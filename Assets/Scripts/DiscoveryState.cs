@@ -5,11 +5,11 @@ public class DiscoveryState : MonoBehaviour
     public bool discovered;
     public float passiveRevealRadius = 5f;
 
-    private SpriteRenderer[] spriteRenderers;
+    private Renderer[] renderers;
 
     private void Awake()
     {
-        spriteRenderers = GetComponentsInChildren<SpriteRenderer>();
+        renderers = GetComponentsInChildren<Renderer>();
         ApplyVisibility();
     }
 
@@ -47,16 +47,23 @@ public class DiscoveryState : MonoBehaviour
 
     private void ApplyVisibility()
     {
-        if (spriteRenderers == null)
+        renderers = GetComponentsInChildren<Renderer>();
+
+        if (renderers == null)
         {
             return;
         }
 
-        for (int i = 0; i < spriteRenderers.Length; i++)
+        for (int i = 0; i < renderers.Length; i++)
         {
-            Color color = spriteRenderers[i].color;
+            if (renderers[i] == null || renderers[i].material == null)
+            {
+                continue;
+            }
+
+            Color color = renderers[i].material.color;
             color.a = discovered ? 1f : 0.18f;
-            spriteRenderers[i].color = color;
+            renderers[i].material.color = color;
         }
     }
 }

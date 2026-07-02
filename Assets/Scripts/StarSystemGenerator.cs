@@ -156,7 +156,8 @@ deposit.destroyWhenDepleted = false;
             GameObject asteroid = BuildSpriteObject(body.name, body.position, body.radius * celestialScaleMultiplier, ResourceColor(body.primaryResource), body.discoveredAtStart, MapMarkerType.Asteroid, body.radius);
             ResourceDeposit deposit = asteroid.AddComponent<ResourceDeposit>();
 deposit.ConfigureSingleResource(body.primaryResource, body.resourceAmount, 12);
-asteroid.AddComponent<MineableAsteroid>();
+deposit.destroyWhenDepleted = false;
+asteroid.AddComponent<CircularDestructibleAsteroid>();
         }
 
         BuildDysonSatellites(layout);
@@ -554,19 +555,7 @@ private static void AddPlanetResource(List<ResourceStack> resources, ResourceTyp
 
     private static Color ResourceColor(ResourceType resourceType)
     {
-        switch (resourceType)
-        {
-            case ResourceType.Ice:
-                return new Color(0.45f, 0.9f, 1f);
-            case ResourceType.Silicate:
-                return new Color(0.75f, 0.72f, 0.95f);
-            case ResourceType.Copper:
-                return new Color(0.95f, 0.45f, 0.2f);
-            case ResourceType.Biomass:
-                return new Color(0.42f, 0.95f, 0.44f);
-            default:
-                return new Color(0.6f, 0.58f, 0.52f);
-        }
+        return ResourceVisuals.ColorFor(resourceType);
     }
 
     private static Vector2 Direction(float radians)
