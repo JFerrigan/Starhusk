@@ -609,6 +609,14 @@ public class AutomatonSystemTests
     }
 
     [Test]
+    public void StationarySatellitePlacementRequiresNearSunAnnulus()
+    {
+        Assert.IsFalse(AutomatonPlacementController.IsValidStationarySatellitePosition(new Vector2(5f, 0f)));
+        Assert.IsTrue(AutomatonPlacementController.IsValidStationarySatellitePosition(new Vector2(100f, 0f)));
+        Assert.IsFalse(AutomatonPlacementController.IsValidStationarySatellitePosition(new Vector2(220f, 0f)));
+    }
+
+    [Test]
     public void FreighterPriorityLoadsOnlySelectedResource()
     {
         GameObject sourceObject = new GameObject("Source");
@@ -683,6 +691,123 @@ public class AutomatonSystemTests
             Object.DestroyImmediate(freighterObject);
             Object.DestroyImmediate(destinationObject);
             Object.DestroyImmediate(sourceObject);
+        }
+    }
+
+    [Test]
+    public void CompanionCollectsPickupIntoCargo()
+    {
+        GameObject companionObject = new GameObject("Companion");
+        GameObject pickupObject = new GameObject("Pickup");
+
+        try
+        {
+            CompanionAutomaton companion = companionObject.AddComponent<CompanionAutomaton>();
+            ResourcePickup pickup = pickupObject.AddComponent<ResourcePickup>();
+            pickup.Initialize(ResourceType.Ore, 12, Vector2.zero, ResourceVisuals.ColorFor(ResourceType.Ore));
+
+            Assert.IsTrue(companion.TryCollectPickup(pickup));
+            Assert.That(companion.Cargo.GetAmount(ResourceType.Ore), Is.EqualTo(12));
+        }
+        finally
+        {
+            Object.DestroyImmediate(pickupObject);
+            Object.DestroyImmediate(companionObject);
+        }
+    }
+
+    [Test]
+    public void CompanionTargetsNearestReachableSpacePickup()
+    {
+        GameObject companionObject = new GameObject("Companion");
+        GameObject nearPickupObject = new GameObject("Near Pickup");
+        GameObject farPickupObject = new GameObject("Far Pickup");
+
+        try
+        {
+            companionObject.transform.position = Vector3.zero;
+            CompanionAutomaton companion = companionObject.AddComponent<CompanionAutomaton>();
+            companion.pickupScanRadius = 10f;
+
+            nearPickupObject.transform.position = new Vector3(6f, 0f, 0f);
+            ResourcePickup nearPickup = nearPickupObject.AddComponent<ResourcePickup>();
+            nearPickup.Initialize(ResourceType.Ore, 4, Vector2.zero, ResourceVisuals.ColorFor(ResourceType.Ore));
+
+            farPickupObject.transform.position = new Vector3(14f, 0f, 0f);
+            ResourcePickup farPickup = farPickupObject.AddComponent<ResourcePickup>();
+            farPickup.Initialize(ResourceType.Ore, 4, Vector2.zero, ResourceVisuals.ColorFor(ResourceType.Ore));
+
+            Assert.That(companion.FindTargetPickupForTests(), Is.EqualTo(nearPickup));
+            Assert.That(companion.FindTargetPickupForTests(), Is.Not.EqualTo(farPickup));
+        }
+        finally
+        {
+            Object.DestroyImmediate(farPickupObject);
+            Object.DestroyImmediate(nearPickupObject);
+            Object.DestroyImmediate(companionObject);
+        }
+    }
+
+    [Test]
+    public void CompanionDepositsCargoIntoNearbyStorage()
+    {
+        GameObject companionObject = new GameObject("Companion");
+        GameObject storageObject = new GameObject("Storage");
+
+        try
+        {
+            companionObject.transform.position = Vector3.zero;
+            CompanionAutomaton companion = companionObject.AddComponent<CompanionAutomaton>();
+            companion.storageDepositRadius = 6f;
+            companion.Cargo.AddResource(ResourceType.Silicate, 18);
+
+            storageObject.transform.position = new Vector3(4f, 0f, 0f);
+            ResourceStorage storage = storageObject.AddComponent<ResourceStorage>();
+            storage.Configure(100);
+
+            companion.SendMessage("Update");
+
+            Assert.That(companion.Cargo.GetAmount(ResourceType.Silicate), Is.EqualTo(0));
+            Assert.That(storage.GetAmount(ResourceType.Silicate), Is.EqualTo(18));
+        }
+        finally
+        {
+            Object.DestroyImmediate(storageObject);
+            Object.DestroyImmediate(companionObject);
+        }
+    }
+
+    [Test]
+    public void CompanionDepositsWhenPlayerIsNearStorage()
+    {
+        GameObject playerObject = new GameObject("Player");
+        GameObject companionObject = new GameObject("Companion");
+        GameObject storageObject = new GameObject("Storage");
+
+        try
+        {
+            playerObject.transform.position = new Vector3(10f, 0f, 0f);
+            playerObject.AddComponent<ResourceInventory>();
+
+            companionObject.transform.position = Vector3.zero;
+            CompanionAutomaton companion = companionObject.AddComponent<CompanionAutomaton>();
+            companion.storageDepositRadius = 3f;
+            companion.Cargo.AddResource(ResourceType.Ore, 9);
+
+            storageObject.transform.position = new Vector3(11f, 0f, 0f);
+            ResourceStorage storage = storageObject.AddComponent<ResourceStorage>();
+            storage.Configure(100);
+
+            companion.SendMessage("Update");
+
+            Assert.That(companion.Cargo.GetAmount(ResourceType.Ore), Is.EqualTo(0));
+            Assert.That(storage.GetAmount(ResourceType.Ore), Is.EqualTo(9));
+        }
+        finally
+        {
+            Object.DestroyImmediate(storageObject);
+            Object.DestroyImmediate(companionObject);
+            Object.DestroyImmediate(playerObject);
         }
     }
 

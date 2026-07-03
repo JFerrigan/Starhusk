@@ -20,7 +20,8 @@ public class AutomatonPlacementController : MonoBehaviour
         Hub,
         Freighter,
         FreighterCargoStorage,
-        SatelliteFactory
+        SatelliteFactory,
+        StationarySatellite
     }
 
     private PlacementMode placementMode;
@@ -153,6 +154,11 @@ public class AutomatonPlacementController : MonoBehaviour
         TogglePlacement(PlacementMode.SatelliteFactory);
     }
 
+    public void BeginStationarySatellitePlacement()
+    {
+        TogglePlacement(PlacementMode.StationarySatellite);
+    }
+
     private void SpawnCurrent(Vector2 worldPosition)
     {
         if (!BuildResourcePool.Spend(BuildCostFor(placementMode)))
@@ -189,6 +195,10 @@ public class AutomatonPlacementController : MonoBehaviour
 
             case PlacementMode.SatelliteFactory:
                 SpawnSatelliteFactory(worldPosition);
+                return;
+
+            case PlacementMode.StationarySatellite:
+                SpawnStationarySatellite(worldPosition);
                 return;
         }
     }
@@ -344,6 +354,38 @@ public class AutomatonPlacementController : MonoBehaviour
         marker.requireDiscovery = false;
     }
 
+    private void SpawnStationarySatellite(Vector2 worldPosition)
+    {
+        string displayName = ObjectNamer.NumberedManMadeName("Dyson Receiver");
+        GameObject satelliteObject = new GameObject(displayName);
+        ObjectNamer.AssignIdentity(satelliteObject, displayName, ObjectIdentityCategory.ManMade);
+        satelliteObject.transform.position = new Vector3(worldPosition.x, worldPosition.y, 0f);
+        satelliteObject.transform.localScale = Vector3.one * StationarySatelliteScale();
+        ParentToGeneratedRoot(satelliteObject.transform);
+
+        SpriteRenderer renderer = satelliteObject.AddComponent<SpriteRenderer>();
+        renderer.sprite = PlaceholderSprites.DysonSatellite;
+        renderer.color = StationarySatelliteColor();
+        renderer.sortingOrder = 44;
+
+        DysonSatellite satellite = satelliteObject.AddComponent<DysonSatellite>();
+        satellite.mode = DysonSatelliteMode.Stationary;
+        satellite.sunPosition = Vector2.zero;
+        satellite.SetStationaryPosition(worldPosition);
+
+        CircleCollider2D collider = satelliteObject.AddComponent<CircleCollider2D>();
+        collider.isTrigger = true;
+        collider.radius = StarSystemGenerator.ColliderRadiusForMarker(MapMarkerType.DysonSatellite);
+
+        satelliteObject.AddComponent<ManMadeMovableObject>();
+
+        MapMarker marker = satelliteObject.AddComponent<MapMarker>();
+        marker.markerType = MapMarkerType.DysonSatellite;
+        marker.markerColor = renderer.color;
+        marker.iconScale = 0.8f;
+        marker.requireDiscovery = false;
+    }
+
     private static void ConfigureNoCollisionBody(Rigidbody2D body)
     {
         if (body == null)
@@ -435,12 +477,17 @@ public class AutomatonPlacementController : MonoBehaviour
 
     private static bool PlacementCanOverlap(PlacementMode mode)
     {
-        return mode == PlacementMode.Freighter || mode == PlacementMode.SatelliteFactory;
+        return mode == PlacementMode.Freighter || mode == PlacementMode.SatelliteFactory || mode == PlacementMode.StationarySatellite;
     }
 
     private static bool IsPlacementBlocked(PlacementMode mode, Vector2 worldPosition)
     {
         if (mode == PlacementMode.SatelliteFactory && !IsValidSatelliteFactoryPosition(worldPosition))
+        {
+            return true;
+        }
+
+        if (mode == PlacementMode.StationarySatellite && !IsValidStationarySatellitePosition(worldPosition))
         {
             return true;
         }
@@ -474,6 +521,11 @@ public class AutomatonPlacementController : MonoBehaviour
                     new ResourceStack(ResourceType.Copper, 8),
                     new ResourceStack(ResourceType.Silicate, 8));
 
+            case PlacementMode.StationarySatellite:
+                return Cost(
+                    new ResourceStack(ResourceType.Ore, SatelliteFactory.OreCost),
+                    new ResourceStack(ResourceType.Silicate, SatelliteFactory.SilicateCost));
+
             case PlacementMode.Collector:
                 return Cost(
                     new ResourceStack(ResourceType.Ore, 5),
@@ -490,6 +542,12 @@ public class AutomatonPlacementController : MonoBehaviour
     }
 
     public static bool IsValidSatelliteFactoryPosition(Vector2 worldPosition)
+    {
+        float distanceFromSun = worldPosition.magnitude;
+        return distanceFromSun >= SatelliteFactoryMinSunDistance() && distanceFromSun <= SatelliteFactoryMaxSunDistance();
+    }
+
+    public static bool IsValidStationarySatellitePosition(Vector2 worldPosition)
     {
         float distanceFromSun = worldPosition.magnitude;
         return distanceFromSun >= SatelliteFactoryMinSunDistance() && distanceFromSun <= SatelliteFactoryMaxSunDistance();
@@ -519,6 +577,8 @@ public class AutomatonPlacementController : MonoBehaviour
                 return PlaceholderSprites.CollectorHub;
             case PlacementMode.SatelliteFactory:
                 return PlaceholderSprites.SatelliteFactory;
+            case PlacementMode.StationarySatellite:
+                return PlaceholderSprites.DysonSatellite;
 
             default:
                 return PlaceholderSprites.CollectorAutomaton;
@@ -539,6 +599,8 @@ public class AutomatonPlacementController : MonoBehaviour
                 return FreighterCargoStorageColor();
             case PlacementMode.SatelliteFactory:
                 return SatelliteFactoryColor();
+            case PlacementMode.StationarySatellite:
+                return StationarySatelliteColor();
 
             default:
                 return CollectorColor();
@@ -570,6 +632,11 @@ public class AutomatonPlacementController : MonoBehaviour
         return new Color(0.74f, 0.92f, 1f, 1f);
     }
 
+    private static Color StationarySatelliteColor()
+    {
+        return new Color(1f, 0.86f, 0.34f, 1f);
+    }
+
     private static float VisualScale(PlacementMode mode)
     {
         switch (mode)
@@ -584,6 +651,8 @@ public class AutomatonPlacementController : MonoBehaviour
                 return FreighterCargoStorageScale();
             case PlacementMode.SatelliteFactory:
                 return SatelliteFactoryScale();
+            case PlacementMode.StationarySatellite:
+                return StationarySatelliteScale();
 
             default:
                 return CollectorScale();
@@ -613,6 +682,11 @@ public class AutomatonPlacementController : MonoBehaviour
     private static float SatelliteFactoryScale()
     {
         return 8f;
+    }
+
+    private static float StationarySatelliteScale()
+    {
+        return 1.8f;
     }
 
     private static float LocalColliderRadius()

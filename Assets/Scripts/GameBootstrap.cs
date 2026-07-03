@@ -18,6 +18,7 @@ public class GameBootstrap : MonoBehaviour
     private void Awake()
     {
         EnsurePlayer();
+        EnsureCompanionAutomaton();
         EnsureGenerator();
         EnsureCamera();
         EnsureSpaceBackground();
@@ -141,6 +142,32 @@ if (renderer.sprite != null)
         EnsureMinimumResource(inventory, ResourceType.Silicate, 1000);
         EnsureMinimumResource(inventory, ResourceType.Copper, 1000);
         EnsureMinimumResource(inventory, ResourceType.Biomass, 1000);
+    }
+
+    private void EnsureCompanionAutomaton()
+    {
+        if (FindFirstObjectByType<CompanionAutomaton>() != null)
+        {
+            return;
+        }
+
+        ResourceInventory player = FindFirstObjectByType<ResourceInventory>();
+        if (player == null)
+        {
+            return;
+        }
+
+        GameObject companionObject = new GameObject("Companion Automaton");
+        ObjectNamer.AssignIdentity(companionObject, "Companion Automaton", ObjectIdentityCategory.ManMade);
+        companionObject.transform.position = player.transform.position + new Vector3(-6f, -2f, 0f);
+        companionObject.transform.localScale = Vector3.one * 4.6f;
+        companionObject.AddComponent<CompanionAutomaton>();
+
+        MapMarker marker = companionObject.AddComponent<MapMarker>();
+        marker.markerType = MapMarkerType.Collector;
+        marker.markerColor = new Color(0.35f, 1f, 0.72f);
+        marker.iconScale = 0.9f;
+        marker.requireDiscovery = false;
     }
 
     private void EnsureMinimumResource(ResourceInventory inventory, ResourceType type, int minimum)
