@@ -437,6 +437,9 @@ MonoBehaviour:
   maxPlanets: 5
   asteroidFieldCount: 3
   asteroidsPerField: 16
+  starterAsteroidCount: 2
+  starterAsteroidMinDistance: 16
+  starterAsteroidMaxDistance: 32
   stationaryDysonSatelliteCount: 2
   dynamicDysonSatelliteCount: 1
   celestialScaleMultiplier: 10

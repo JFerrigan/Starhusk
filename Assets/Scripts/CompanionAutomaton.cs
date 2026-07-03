@@ -1,9 +1,10 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class CompanionAutomaton : MonoBehaviour
+public class CompanionAutomaton : MonoBehaviour, IPowerConsumer
 {
     public const int DefaultCapacity = 1200;
+    public const int DefaultPowerDemand = 10;
 
     public float followDistance = 6f;
     public float followSpeed = 24f;
@@ -16,14 +17,21 @@ public class CompanionAutomaton : MonoBehaviour
     [SerializeField]
     private ResourceStorage cargo;
 
+    [SerializeField]
+    private bool isPowered = true;
+
     private ResourceInventory playerInventory;
     private Rigidbody2D rb;
     private SpriteRenderer spriteRenderer;
+    private Color baseVisualColor = Color.white;
+    private bool hasBaseVisualColor;
     private ResourcePickup targetPickup;
     private float nextDepositTime;
 
     public ResourceStorage Cargo => cargo;
     public bool HasCapacity => cargo != null && !cargo.IsFull;
+    public int PowerDemand => DefaultPowerDemand;
+    public bool IsPowered => isPowered;
 
     private void Awake()
     {
@@ -32,6 +40,11 @@ public class CompanionAutomaton : MonoBehaviour
 
     private void Update()
     {
+        if (!isPowered)
+        {
+            return;
+        }
+
         if (playerInventory == null)
         {
             playerInventory = FindFirstObjectByType<ResourceInventory>();
@@ -48,6 +61,16 @@ public class CompanionAutomaton : MonoBehaviour
 
     private void FixedUpdate()
     {
+        if (!isPowered)
+        {
+            if (rb != null)
+            {
+                rb.linearVelocity = Vector2.zero;
+            }
+
+            return;
+        }
+
         if (playerInventory == null || rb == null)
         {
             return;
@@ -80,7 +103,7 @@ public class CompanionAutomaton : MonoBehaviour
 
     public bool TryCollectPickup(ResourcePickup pickup)
     {
-        if (pickup == null || cargo == null || cargo.IsFull)
+        if (!isPowered || pickup == null || cargo == null || cargo.IsFull)
         {
             return false;
         }
@@ -92,6 +115,22 @@ public class CompanionAutomaton : MonoBehaviour
         }
 
         return collected;
+    }
+
+    public void SetPowered(bool powered)
+    {
+        if (isPowered == powered)
+        {
+            return;
+        }
+
+        isPowered = powered;
+        if (!isPowered && rb != null)
+        {
+            rb.linearVelocity = Vector2.zero;
+        }
+
+        ApplyPowerVisual();
     }
 
     public ResourcePickup FindTargetPickupForTests()
@@ -256,7 +295,13 @@ public class CompanionAutomaton : MonoBehaviour
         }
 
         spriteRenderer.sprite = PlaceholderSprites.CollectorAutomaton;
-        spriteRenderer.color = new Color(0.35f, 1f, 0.72f, 1f);
+        if (!hasBaseVisualColor)
+        {
+            baseVisualColor = new Color(0.35f, 1f, 0.72f, 1f);
+            hasBaseVisualColor = true;
+        }
+
+        spriteRenderer.color = baseVisualColor;
         spriteRenderer.sortingOrder = 95;
 
         cargo = GetComponent<ResourceStorage>();
@@ -266,5 +311,18 @@ public class CompanionAutomaton : MonoBehaviour
         }
 
         cargo.Configure(DefaultCapacity);
+        ApplyPowerVisual();
+    }
+
+    private void ApplyPowerVisual()
+    {
+        if (spriteRenderer == null || !hasBaseVisualColor)
+        {
+            return;
+        }
+
+        spriteRenderer.color = isPowered
+            ? baseVisualColor
+            : new Color(baseVisualColor.r * 0.34f, baseVisualColor.g * 0.34f, baseVisualColor.b * 0.34f, baseVisualColor.a);
     }
 }

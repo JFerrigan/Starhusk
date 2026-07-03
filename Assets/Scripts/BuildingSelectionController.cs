@@ -7,7 +7,7 @@ public class BuildingSelectionController : MonoBehaviour
     private const float PanelWidth = 220f;
     private const float FreighterPanelWidth = 380f;
     private const float BasePanelHeight = 116f;
-    private const float FreighterPanelHeight = 420f;
+    private const float FreighterPanelHeight = 440f;
     private const float HeaderHeight = 28f;
 
     private Texture2D pixel;
@@ -18,6 +18,7 @@ public class BuildingSelectionController : MonoBehaviour
     private CollectorAutomaton selectedCollector;
     private FreighterAutomaton selectedFreighter;
     private SatelliteFactory selectedSatelliteFactory;
+    private PowerRelay selectedPowerRelay;
     private CollectorHub selectedHub;
     private ResourceStorage selectedStorage;
     private GameObject selectedObject;
@@ -120,6 +121,12 @@ public class BuildingSelectionController : MonoBehaviour
             return;
         }
 
+        if (selectedPowerRelay != null)
+        {
+            DrawPowerRelayPanel(selectedPowerRelay);
+            return;
+        }
+
         if (selectedHub != null)
         {
             DrawStoragePanel("Cargo Hub", selectedHub.Storage, panelRect.y + 36f);
@@ -148,47 +155,54 @@ public class BuildingSelectionController : MonoBehaviour
             PlacedBuilding building = hits[i].GetComponentInParent<PlacedBuilding>();
             if (building != null)
             {
-                SetSelectedObject(building.gameObject, building, null, null, null, null, null);
+                SetSelectedObject(building.gameObject, building, null, null, null, null, null, null);
                 return;
             }
 
             CollectorAutomaton collector = hits[i].GetComponentInParent<CollectorAutomaton>();
             if (collector != null)
             {
-                SetSelectedObject(collector.gameObject, null, collector, null, null, null, collector.Cargo);
+                SetSelectedObject(collector.gameObject, null, collector, null, null, null, null, collector.Cargo);
                 return;
             }
 
             FreighterAutomaton freighter = hits[i].GetComponentInParent<FreighterAutomaton>();
             if (freighter != null)
             {
-                SetSelectedObject(freighter.gameObject, null, null, freighter, null, null, freighter.Cargo);
+                SetSelectedObject(freighter.gameObject, null, null, freighter, null, null, null, freighter.Cargo);
                 return;
             }
 
             SatelliteFactory satelliteFactory = hits[i].GetComponentInParent<SatelliteFactory>();
             if (satelliteFactory != null)
             {
-                SetSelectedObject(satelliteFactory.gameObject, null, null, null, satelliteFactory, null, satelliteFactory.Storage);
+                SetSelectedObject(satelliteFactory.gameObject, null, null, null, satelliteFactory, null, null, satelliteFactory.Storage);
+                return;
+            }
+
+            PowerRelay powerRelay = hits[i].GetComponentInParent<PowerRelay>();
+            if (powerRelay != null)
+            {
+                SetSelectedObject(powerRelay.gameObject, null, null, null, null, powerRelay, null, null);
                 return;
             }
 
             CollectorHub hub = hits[i].GetComponentInParent<CollectorHub>();
             if (hub != null)
             {
-                SetSelectedObject(hub.gameObject, null, null, null, null, hub, hub.Storage);
+                SetSelectedObject(hub.gameObject, null, null, null, null, null, hub, hub.Storage);
                 return;
             }
 
             ResourceStorage storage = hits[i].GetComponentInParent<ResourceStorage>();
             if (storage != null)
             {
-                SetSelectedObject(storage.gameObject, null, null, null, null, null, storage);
+                SetSelectedObject(storage.gameObject, null, null, null, null, null, null, storage);
                 return;
             }
         }
 
-        SetSelectedObject(null, null, null, null, null, null, null);
+        SetSelectedObject(null, null, null, null, null, null, null, null);
     }
 
 public void SelectFreighter(FreighterAutomaton freighter)
@@ -198,7 +212,7 @@ public void SelectFreighter(FreighterAutomaton freighter)
         return;
     }
 
-    SetSelectedObject(freighter.gameObject, null, null, freighter, null, null, freighter.Cargo);
+    SetSelectedObject(freighter.gameObject, null, null, freighter, null, null, null, freighter.Cargo);
 }
 
 public void ClearSelection()
@@ -218,6 +232,7 @@ public void ClearSelection()
     selectedCollector = null;
     selectedFreighter = null;
     selectedSatelliteFactory = null;
+    selectedPowerRelay = null;
     selectedHub = null;
     selectedStorage = null;
     selectedRenderer = null;
@@ -227,7 +242,7 @@ public void ClearSelection()
     cargoPriorityDropdownOpen = false;
 }
 
-    private void SetSelectedObject(GameObject targetObject, PlacedBuilding building, CollectorAutomaton collector, FreighterAutomaton freighter, SatelliteFactory satelliteFactory, CollectorHub hub, ResourceStorage storage)
+    private void SetSelectedObject(GameObject targetObject, PlacedBuilding building, CollectorAutomaton collector, FreighterAutomaton freighter, SatelliteFactory satelliteFactory, PowerRelay powerRelay, CollectorHub hub, ResourceStorage storage)
     {
         if (selectedObject == targetObject)
         {
@@ -249,6 +264,7 @@ public void ClearSelection()
         selectedCollector = collector;
         selectedFreighter = freighter;
         selectedSatelliteFactory = satelliteFactory;
+        selectedPowerRelay = powerRelay;
         selectedHub = hub;
         selectedStorage = storage;
         selectedRenderer = null;
@@ -368,16 +384,18 @@ public void ClearSelection()
         GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 10f, 190f, 20f), "Collector", titleStyle);
         GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 36f, 190f, 18f), "Goal: " + collector.goal, bodyStyle);
         GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 56f, 190f, 18f), "State: " + collector.State, bodyStyle);
-        DrawStorageContents(collector.Cargo, panelRect.y + 80f);
+        DrawPowerStatus(collector, panelRect.y + 76f);
+        DrawStorageContents(collector.Cargo, panelRect.y + 100f);
     }
 
     private void DrawFreighterPanel(FreighterAutomaton freighter)
     {
         GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 10f, panelRect.width - 24f, 20f), selectedObject.name, titleStyle);
         GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 36f, panelRect.width - 24f, 18f), "State: " + freighter.State, bodyStyle);
-        DrawStorageContents(freighter.Cargo, panelRect.y + 60f);
+        DrawPowerStatus(freighter, panelRect.y + 56f);
+        DrawStorageContents(freighter.Cargo, panelRect.y + 80f);
 
-        float dropdownY = panelRect.y + 138f + (ResourceLineCount(freighter.Cargo) * 18f);
+        float dropdownY = panelRect.y + 158f + (ResourceLineCount(freighter.Cargo) * 18f);
         DrawStorageDropdown(
             new Rect(panelRect.x + 12f, dropdownY, panelRect.width - 24f, 28f),
             "Source",
@@ -433,18 +451,32 @@ public void ClearSelection()
     {
         GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 10f, panelRect.width - 24f, 20f), selectedObject.name, titleStyle);
         GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 36f, panelRect.width - 24f, 18f), "Produced: " + factory.ProducedCount, bodyStyle);
+        DrawPowerStatus(factory, panelRect.y + 56f);
         GUI.Label(
-            new Rect(panelRect.x + 12f, panelRect.y + 56f, panelRect.width - 24f, 18f),
+            new Rect(panelRect.x + 12f, panelRect.y + 76f, panelRect.width - 24f, 18f),
             factory.IsBuilding
                 ? "Building: " + Mathf.RoundToInt(factory.BuildProgress * 100f) + "%  " + factory.BuildTimeRemaining.ToString("0.0") + "s"
                 : "Building: Waiting for resources",
             bodyStyle
         );
 
-        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 82f, panelRect.width - 24f, 18f), "Recipe Pools", bodyStyle);
-        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 104f, panelRect.width - 24f, 18f), "Ore: " + factory.OrePool + " / " + SatelliteFactory.OreCost, bodyStyle);
-        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 122f, panelRect.width - 24f, 18f), "Silicate: " + factory.SilicatePool + " / " + SatelliteFactory.SilicateCost, bodyStyle);
-        DrawStorageContents(factory.Storage, panelRect.y + 148f);
+        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 102f, panelRect.width - 24f, 18f), "Recipe Pools", bodyStyle);
+        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 124f, panelRect.width - 24f, 18f), "Ore: " + factory.OrePool + " / " + SatelliteFactory.OreCost, bodyStyle);
+        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 142f, panelRect.width - 24f, 18f), "Silicate: " + factory.SilicatePool + " / " + SatelliteFactory.SilicateCost, bodyStyle);
+        DrawStorageContents(factory.Storage, panelRect.y + 168f);
+    }
+
+    private void DrawPowerRelayPanel(PowerRelay relay)
+    {
+        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 10f, panelRect.width - 24f, 20f), selectedObject.name, titleStyle);
+        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 36f, panelRect.width - 24f, 18f), relay.IsConnected ? "Powered" : "Unpowered", bodyStyle);
+        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 56f, panelRect.width - 24f, 18f), "Range: " + Mathf.RoundToInt(relay.Range), bodyStyle);
+    }
+
+    private void DrawPowerStatus(IPowerConsumer consumer, float y)
+    {
+        string status = consumer.IsPowered ? "Powered" : "Unpowered";
+        GUI.Label(new Rect(panelRect.x + 12f, y, panelRect.width - 24f, 18f), status + "  Demand: " + consumer.PowerDemand, bodyStyle);
     }
 
     private void DrawStorageDropdown(Rect rect, string label, FreighterAutomaton freighter, ResourceStorage selectedStorageValue, bool isSource)
@@ -559,12 +591,17 @@ public void ClearSelection()
 
         if (selectedSatelliteFactory != null)
         {
-            return Mathf.Max(220f, 128f + (ResourceLineCount(selectedSatelliteFactory.Storage) * 18f));
+            return Mathf.Max(240f, 148f + (ResourceLineCount(selectedSatelliteFactory.Storage) * 18f));
         }
 
         if (selectedCollector != null)
         {
-            return Mathf.Max(BasePanelHeight, 124f + (ResourceLineCount(selectedCollector.Cargo) * 18f));
+            return Mathf.Max(BasePanelHeight, 144f + (ResourceLineCount(selectedCollector.Cargo) * 18f));
+        }
+
+        if (selectedPowerRelay != null)
+        {
+            return BasePanelHeight;
         }
 
         if (selectedHub != null)

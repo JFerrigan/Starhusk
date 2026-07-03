@@ -21,7 +21,8 @@ public class AutomatonPlacementController : MonoBehaviour
         Freighter,
         FreighterCargoStorage,
         SatelliteFactory,
-        StationarySatellite
+        StationarySatellite,
+        PowerRelay
     }
 
     private PlacementMode placementMode;
@@ -159,6 +160,11 @@ public class AutomatonPlacementController : MonoBehaviour
         TogglePlacement(PlacementMode.StationarySatellite);
     }
 
+    public void BeginPowerRelayPlacement()
+    {
+        TogglePlacement(PlacementMode.PowerRelay);
+    }
+
     private void SpawnCurrent(Vector2 worldPosition)
     {
         if (!BuildResourcePool.Spend(BuildCostFor(placementMode)))
@@ -200,6 +206,10 @@ public class AutomatonPlacementController : MonoBehaviour
             case PlacementMode.StationarySatellite:
                 SpawnStationarySatellite(worldPosition);
                 return;
+
+            case PlacementMode.PowerRelay:
+                SpawnPowerRelay(worldPosition);
+                return;
         }
     }
 
@@ -231,6 +241,34 @@ public class AutomatonPlacementController : MonoBehaviour
         marker.markerType = MapMarkerType.Collector;
         marker.markerColor = CollectorColor();
         marker.iconScale = 0.8f;
+        marker.requireDiscovery = false;
+    }
+
+    private void SpawnPowerRelay(Vector2 worldPosition)
+    {
+        string displayName = ObjectNamer.NumberedManMadeName("Power Relay");
+        GameObject relayObject = new GameObject(displayName);
+        ObjectNamer.AssignIdentity(relayObject, displayName, ObjectIdentityCategory.ManMade);
+        relayObject.transform.position = new Vector3(worldPosition.x, worldPosition.y, 0f);
+        relayObject.transform.localScale = Vector3.one * PowerRelayScale();
+        ParentToGeneratedRoot(relayObject.transform);
+
+        SpriteRenderer renderer = relayObject.AddComponent<SpriteRenderer>();
+        renderer.sprite = PlaceholderSprites.CollectorHub;
+        renderer.color = PowerRelayColor();
+        renderer.sortingOrder = 42;
+
+        CircleCollider2D collider = relayObject.AddComponent<CircleCollider2D>();
+        collider.radius = LocalColliderRadius();
+        collider.isTrigger = true;
+
+        PowerRelay relay = relayObject.AddComponent<PowerRelay>();
+        relay.poweredColor = PowerRelayColor();
+
+        MapMarker marker = relayObject.GetComponent<MapMarker>();
+        marker.markerType = MapMarkerType.PowerRelay;
+        marker.markerColor = PowerRelayColor();
+        marker.iconScale = 1f;
         marker.requireDiscovery = false;
     }
 
@@ -526,6 +564,11 @@ public class AutomatonPlacementController : MonoBehaviour
                     new ResourceStack(ResourceType.Ore, SatelliteFactory.OreCost),
                     new ResourceStack(ResourceType.Silicate, SatelliteFactory.SilicateCost));
 
+            case PlacementMode.PowerRelay:
+                return Cost(
+                    new ResourceStack(ResourceType.Ore, PowerRelay.OreCost),
+                    new ResourceStack(ResourceType.Silicate, PowerRelay.SilicateCost));
+
             case PlacementMode.Collector:
                 return Cost(
                     new ResourceStack(ResourceType.Ore, 5),
@@ -574,6 +617,7 @@ public class AutomatonPlacementController : MonoBehaviour
         {
             case PlacementMode.Hub:
             case PlacementMode.FreighterCargoStorage:
+            case PlacementMode.PowerRelay:
                 return PlaceholderSprites.CollectorHub;
             case PlacementMode.SatelliteFactory:
                 return PlaceholderSprites.SatelliteFactory;
@@ -601,6 +645,8 @@ public class AutomatonPlacementController : MonoBehaviour
                 return SatelliteFactoryColor();
             case PlacementMode.StationarySatellite:
                 return StationarySatelliteColor();
+            case PlacementMode.PowerRelay:
+                return PowerRelayColor();
 
             default:
                 return CollectorColor();
@@ -637,6 +683,11 @@ public class AutomatonPlacementController : MonoBehaviour
         return new Color(1f, 0.86f, 0.34f, 1f);
     }
 
+    private static Color PowerRelayColor()
+    {
+        return new Color(1f, 0.9f, 0.36f, 1f);
+    }
+
     private static float VisualScale(PlacementMode mode)
     {
         switch (mode)
@@ -653,6 +704,8 @@ public class AutomatonPlacementController : MonoBehaviour
                 return SatelliteFactoryScale();
             case PlacementMode.StationarySatellite:
                 return StationarySatelliteScale();
+            case PlacementMode.PowerRelay:
+                return PowerRelayScale();
 
             default:
                 return CollectorScale();
@@ -689,6 +742,11 @@ public class AutomatonPlacementController : MonoBehaviour
         return 1.8f;
     }
 
+    private static float PowerRelayScale()
+    {
+        return 6.5f;
+    }
+
     private static float LocalColliderRadius()
     {
         return 0.42f;
@@ -715,11 +773,12 @@ public class AutomatonPlacementController : MonoBehaviour
     }
 }
 
-public class FreighterAutomaton : MonoBehaviour
+public class FreighterAutomaton : MonoBehaviour, IPowerConsumer
 {
     public const string CargoStorageObjectName = "Freighter Cargo Storage";
     public const int DefaultCapacity = 5000;
     public const int DestinationCapacity = 250000;
+    public const int DefaultPowerDemand = 15;
 
     public float moveSpeed = 26f;
     public float interactionDistance = 8f;
@@ -744,13 +803,17 @@ public class FreighterAutomaton : MonoBehaviour
     [SerializeField]
     private FreighterState state = FreighterState.FindingEndpoints;
 
+    [SerializeField]
+    private bool isPowered = true;
+
     private Rigidbody2D rb;
     private SpriteRenderer spriteRenderer;
     private Transform destinationTransform;
     private Transform sourceTransform;
-    private float workCompleteTime;
+    private float workProgressSeconds;
     private Color baseColor = Color.white;
     private bool hasBaseColor;
+    private bool workingVisualActive;
     private readonly List<Vector2> routePath = new List<Vector2>();
     private int routeIndex = -1;
     private Transform lastDestination;
@@ -760,6 +823,8 @@ public class FreighterAutomaton : MonoBehaviour
     public ResourceStorage DestinationStorage => destinationStorage;
     public FreighterState State => state;
     public IReadOnlyList<Vector2> RoutePath => routePath;
+    public int PowerDemand => DefaultPowerDemand;
+    public bool IsPowered => isPowered;
 
     private void Awake()
     {
@@ -800,6 +865,12 @@ public class FreighterAutomaton : MonoBehaviour
 
     private void Update()
     {
+        if (!isPowered)
+        {
+            ApplyWorkingVisual(false);
+            return;
+        }
+
         if (!HasEndpoints())
         {
             state = FreighterState.FindingEndpoints;
@@ -812,19 +883,33 @@ public class FreighterAutomaton : MonoBehaviour
             state = cargo.IsEmpty ? FreighterState.MovingToSource : FreighterState.MovingToStorage;
         }
 
-        if (state == FreighterState.LoadingAtSource && Time.time >= workCompleteTime)
+        if (state == FreighterState.LoadingAtSource)
         {
-            CompleteLoading();
+            workProgressSeconds += Time.deltaTime;
+            if (workProgressSeconds >= Mathf.Max(0f, loadingDuration))
+            {
+                CompleteLoading();
+            }
         }
 
-        if (state == FreighterState.UnloadingAtStorage && Time.time >= workCompleteTime)
+        if (state == FreighterState.UnloadingAtStorage)
         {
-            CompleteUnloading();
+            workProgressSeconds += Time.deltaTime;
+            if (workProgressSeconds >= Mathf.Max(0f, unloadingDuration))
+            {
+                CompleteUnloading();
+            }
         }
     }
 
     private void FixedUpdate()
     {
+        if (!isPowered)
+        {
+            StopMovement();
+            return;
+        }
+
         if (!HasEndpoints())
         {
             StopMovement();
@@ -899,6 +984,25 @@ public class FreighterAutomaton : MonoBehaviour
         cargoPriority = priority;
     }
 
+    public void SetPowered(bool powered)
+    {
+        if (isPowered == powered)
+        {
+            return;
+        }
+
+        isPowered = powered;
+        if (!isPowered)
+        {
+            StopMovement();
+            ApplyWorkingVisual(false);
+        }
+        else
+        {
+            ApplyVisualState();
+        }
+    }
+
     public void CompleteLoadingForTests()
     {
         LoadFromSourceStorage();
@@ -922,20 +1026,21 @@ public class FreighterAutomaton : MonoBehaviour
     private void BeginLoading()
     {
         state = FreighterState.LoadingAtSource;
-        workCompleteTime = Time.time + Mathf.Max(0f, loadingDuration);
+        workProgressSeconds = 0f;
         ApplyWorkingVisual(true);
     }
 
     private void BeginUnloading()
     {
         state = FreighterState.UnloadingAtStorage;
-        workCompleteTime = Time.time + Mathf.Max(0f, unloadingDuration);
+        workProgressSeconds = 0f;
         ApplyWorkingVisual(true);
     }
 
     private void CompleteLoading()
     {
         ApplyWorkingVisual(false);
+        workProgressSeconds = 0f;
         LoadFromSourceStorage();
 
         state = cargo.IsEmpty
@@ -946,6 +1051,7 @@ public class FreighterAutomaton : MonoBehaviour
     private void CompleteUnloading()
     {
         ApplyWorkingVisual(false);
+        workProgressSeconds = 0f;
 
         if (destinationStorage != null && cargo != null)
         {
@@ -959,7 +1065,7 @@ public class FreighterAutomaton : MonoBehaviour
 
     private void LoadFromSourceStorage()
     {
-        if (sourceStorage == null || cargo == null || cargo.IsFull)
+        if (!isPowered || sourceStorage == null || cargo == null || cargo.IsFull)
         {
             return;
         }
@@ -1173,9 +1279,27 @@ public class FreighterAutomaton : MonoBehaviour
             return;
         }
 
-        spriteRenderer.color = active
+        workingVisualActive = active;
+        ApplyVisualState();
+    }
+
+    private void ApplyVisualState()
+    {
+        if (spriteRenderer == null || !hasBaseColor)
+        {
+            return;
+        }
+
+        Color color = workingVisualActive
             ? new Color(baseColor.r * 0.72f, baseColor.g * 0.72f, baseColor.b * 0.72f, baseColor.a)
             : baseColor;
+
+        if (!isPowered)
+        {
+            color = new Color(color.r * 0.34f, color.g * 0.34f, color.b * 0.34f, color.a);
+        }
+
+        spriteRenderer.color = color;
     }
 }
 

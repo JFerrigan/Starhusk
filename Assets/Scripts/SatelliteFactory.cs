@@ -1,13 +1,14 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class SatelliteFactory : MonoBehaviour
+public class SatelliteFactory : MonoBehaviour, IPowerConsumer
 {
     public const int DefaultCapacity = 5000;
     public const int OreCost = 50;
     public const int SilicateCost = 25;
     public const float DefaultBuildDuration = 10f;
     public const float DefaultOrbitSpeedDegrees = 5f;
+    public const int DefaultPowerDemand = 30;
 
     public float buildDuration = DefaultBuildDuration;
     public float orbitSpeedDegrees = DefaultOrbitSpeedDegrees;
@@ -28,13 +29,21 @@ public class SatelliteFactory : MonoBehaviour
     [SerializeField]
     private int silicatePool;
 
-    private float buildCompleteTime;
+    [SerializeField]
+    private bool isPowered = true;
+
+    private float buildProgressSeconds;
+    private SpriteRenderer spriteRenderer;
+    private Color baseVisualColor = Color.white;
+    private bool hasBaseVisualColor;
 
     public ResourceStorage Storage => storage;
     public bool IsBuilding => isBuilding;
     public int ProducedCount => producedCount;
     public int OrePool => orePool;
     public int SilicatePool => silicatePool;
+    public int PowerDemand => DefaultPowerDemand;
+    public bool IsPowered => isPowered;
     public float BuildProgress
     {
         get
@@ -45,14 +54,21 @@ public class SatelliteFactory : MonoBehaviour
             }
 
             float duration = Mathf.Max(0.01f, buildDuration);
-            return Mathf.Clamp01(1f - ((buildCompleteTime - Time.time) / duration));
+            return Mathf.Clamp01(buildProgressSeconds / duration);
         }
     }
 
-    public float BuildTimeRemaining => isBuilding ? Mathf.Max(0f, buildCompleteTime - Time.time) : 0f;
+    public float BuildTimeRemaining => isBuilding ? Mathf.Max(0f, Mathf.Max(0.01f, buildDuration) - buildProgressSeconds) : 0f;
 
     private void Awake()
     {
+        spriteRenderer = GetComponentInChildren<SpriteRenderer>();
+        if (spriteRenderer != null)
+        {
+            baseVisualColor = spriteRenderer.color;
+            hasBaseVisualColor = true;
+        }
+
         storage = GetComponent<ResourceStorage>();
         if (storage == null)
         {
@@ -60,13 +76,20 @@ public class SatelliteFactory : MonoBehaviour
         }
 
         storage.Configure(DefaultCapacity);
+        ApplyPowerVisual();
     }
 
     private void Update()
     {
+        if (!isPowered)
+        {
+            return;
+        }
+
         if (isBuilding)
         {
-            if (Time.time >= buildCompleteTime)
+            buildProgressSeconds += Time.deltaTime;
+            if (buildProgressSeconds >= Mathf.Max(0.01f, buildDuration))
             {
                 CompleteBuild();
             }
@@ -81,7 +104,8 @@ public class SatelliteFactory : MonoBehaviour
     {
         IntakeDeliveredResources();
 
-        return orePool >= OreCost &&
+        return isPowered &&
+            orePool >= OreCost &&
             silicatePool >= SilicateCost;
     }
 
@@ -96,8 +120,19 @@ public class SatelliteFactory : MonoBehaviour
         silicatePool -= SilicateCost;
 
         isBuilding = true;
-        buildCompleteTime = Time.time + Mathf.Max(0.01f, buildDuration);
+        buildProgressSeconds = 0f;
         return true;
+    }
+
+    public void SetPowered(bool powered)
+    {
+        if (isPowered == powered)
+        {
+            return;
+        }
+
+        isPowered = powered;
+        ApplyPowerVisual();
     }
 
     public int PoolAmountFor(ResourceType type)
@@ -150,6 +185,11 @@ public class SatelliteFactory : MonoBehaviour
 
     public DysonSatellite CompleteBuildNow()
     {
+        if (!isPowered)
+        {
+            return null;
+        }
+
         if (!isBuilding && !TryStartBuild())
         {
             return null;
@@ -161,8 +201,21 @@ public class SatelliteFactory : MonoBehaviour
     private DysonSatellite CompleteBuild()
     {
         isBuilding = false;
+        buildProgressSeconds = 0f;
         producedCount++;
         return SpawnSatellite();
+    }
+
+    private void ApplyPowerVisual()
+    {
+        if (spriteRenderer == null || !hasBaseVisualColor)
+        {
+            return;
+        }
+
+        spriteRenderer.color = isPowered
+            ? baseVisualColor
+            : new Color(baseVisualColor.r * 0.36f, baseVisualColor.g * 0.36f, baseVisualColor.b * 0.36f, baseVisualColor.a);
     }
 
     private DysonSatellite SpawnSatellite()

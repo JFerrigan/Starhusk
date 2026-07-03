@@ -184,6 +184,8 @@ public class BasicMapController : MonoBehaviour
                 return new Color(0.45f, 0.95f, 1f, 0.95f);
             case MapMarkerType.Hub:
                 return new Color(1f, 0.86f, 0.38f, 0.95f);
+            case MapMarkerType.PowerRelay:
+                return new Color(1f, 0.9f, 0.36f, 0.95f);
             default:
                 return new Color(Mathf.Max(0.48f, contact.color.r), Mathf.Max(0.82f, contact.color.g), Mathf.Max(0.9f, contact.color.b), 0.9f);
         }
@@ -237,6 +239,8 @@ public class BasicMapController : MonoBehaviour
                 return 5f;
             case MapMarkerType.Hub:
                 return 7f;
+            case MapMarkerType.PowerRelay:
+                return 6f;
             default:
                 return 4f;
         }

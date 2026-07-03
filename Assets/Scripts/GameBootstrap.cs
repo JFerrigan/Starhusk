@@ -28,6 +28,7 @@ public class GameBootstrap : MonoBehaviour
         HideLegacyResourceUI();
         EnsureBuildingControllers();
         EnsureAutomatonControllers();
+        EnsurePowerNetworkController();
     }
 
     private void EnsurePlayer()
@@ -320,6 +321,17 @@ if (renderer.sprite != null)
 
         GameObject placementObject = new GameObject("AutomatonPlacementController");
         placementObject.AddComponent<AutomatonPlacementController>();
+    }
+
+    private void EnsurePowerNetworkController()
+    {
+        if (FindFirstObjectByType<PowerNetworkController>() != null)
+        {
+            return;
+        }
+
+        GameObject powerObject = new GameObject("PowerNetworkController");
+        powerObject.AddComponent<PowerNetworkController>();
     }
 
     private static Sprite LoadPlayerShipSprite()

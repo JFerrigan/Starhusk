@@ -3,7 +3,7 @@ using UnityEngine;
 public class BuildOptionsMenu : MonoBehaviour
 {
     private const float WindowWidth = 260f;
-    private const float WindowHeight = 374f;
+    private const float WindowHeight = 456f;
     private const float HeaderHeight = 26f;
 
     private Rect windowRect;
@@ -69,6 +69,8 @@ public class BuildOptionsMenu : MonoBehaviour
         DrawBuildButton(new Rect(windowRect.x + 12f, y, windowRect.width - 24f, 26f), "Satellite Factory", StartSatelliteFactory);
         y += 30f;
         DrawBuildButton(new Rect(windowRect.x + 12f, y, windowRect.width - 24f, 26f), "Stationary Satellite", StartStationarySatellite);
+        y += 30f;
+        DrawBuildButton(new Rect(windowRect.x + 12f, y, windowRect.width - 24f, 26f), "Relay", StartPowerRelay);
     }
 
     private void EnsurePosition()
@@ -180,6 +182,15 @@ public class BuildOptionsMenu : MonoBehaviour
         if (controller != null)
         {
             controller.BeginStationarySatellitePlacement();
+        }
+    }
+
+    private static void StartPowerRelay()
+    {
+        AutomatonPlacementController controller = AutomatonPlacementController.Instance;
+        if (controller != null)
+        {
+            controller.BeginPowerRelayPlacement();
         }
     }
 

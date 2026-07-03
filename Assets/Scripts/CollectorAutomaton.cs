@@ -1,9 +1,10 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class CollectorAutomaton : MonoBehaviour
+public class CollectorAutomaton : MonoBehaviour, IPowerConsumer
 {
     public const int DefaultCapacity = 500;
+    public const int DefaultPowerDemand = 10;
 
     public AutomatonType automatonType = AutomatonType.Collector;
     public AutomatonGoal goal = AutomatonGoal.CollectResources;
@@ -33,13 +34,16 @@ public class CollectorAutomaton : MonoBehaviour
     [SerializeField]
     private CollectorState state = CollectorState.Idle;
 
+    [SerializeField]
+    private bool isPowered = true;
+
     private Rigidbody2D rb;
     private SpriteRenderer spriteRenderer;
     private Vector2 desiredVelocity;
     private readonly List<Vector2> routePath = new List<Vector2>();
     private float nextScanTime;
     private float nextRouteRetryTime;
-    private float collectionCompleteTime;
+    private float collectionProgressSeconds;
     private int routeIndex = -1;
     private int routeNetworkVersion = -1;
     private Transform lastDestination;
@@ -55,7 +59,9 @@ public class CollectorAutomaton : MonoBehaviour
     public IReadOnlyList<Vector2> RoutePath => routePath;
     public float CurrentInteractionRange => InteractionRangeFor(CurrentDestination());
     public bool IsCollecting => state == CollectorState.CollectingFromBuilding;
-    public float CollectionTimeRemaining => IsCollecting ? Mathf.Max(0f, collectionCompleteTime - Time.time) : 0f;
+    public float CollectionTimeRemaining => IsCollecting ? Mathf.Max(0f, Mathf.Max(0f, collectionDuration) - collectionProgressSeconds) : 0f;
+    public int PowerDemand => DefaultPowerDemand;
+    public bool IsPowered => isPowered;
 
     private void Awake()
     {
@@ -96,6 +102,11 @@ for (int i = 0; i < colliders.Length; i++)
 
     private void Update()
     {
+        if (!isPowered)
+        {
+            return;
+        }
+
         if (Time.time < nextScanTime)
         {
             return;
@@ -107,6 +118,12 @@ for (int i = 0; i < colliders.Length; i++)
 
     private void FixedUpdate()
     {
+        if (!isPowered)
+        {
+            StopMovement();
+            return;
+        }
+
         if (state == CollectorState.CollectingFromBuilding)
         {
             UpdateCollection();
@@ -331,6 +348,22 @@ state = CollectorState.Idle;
         }
     }
 
+    public void SetPowered(bool powered)
+    {
+        if (isPowered == powered)
+        {
+            return;
+        }
+
+        isPowered = powered;
+        if (!isPowered)
+        {
+            StopMovement();
+        }
+
+        ApplyVisualState();
+    }
+
     private void ArriveAtDestination()
     {
         if (state == CollectorState.MovingToBuilding)
@@ -361,7 +394,7 @@ state = CollectorState.Idle;
         }
 
         state = CollectorState.CollectingFromBuilding;
-        collectionCompleteTime = Time.time + Mathf.Max(0f, collectionDuration);
+        collectionProgressSeconds = 0f;
         StopMovement();
         ApplyCollectionVisual(true);
     }
@@ -374,7 +407,8 @@ state = CollectorState.Idle;
             return;
         }
 
-        if (Time.time >= collectionCompleteTime)
+        collectionProgressSeconds += Time.fixedDeltaTime;
+        if (collectionProgressSeconds >= Mathf.Max(0f, collectionDuration))
         {
             FinishCollection();
         }
@@ -383,6 +417,7 @@ state = CollectorState.Idle;
 private void FinishCollection()
 {
     ApplyCollectionVisual(false);
+    collectionProgressSeconds = 0f;
     CollectFromBuilding();
 
     ClearRoute();
@@ -553,13 +588,30 @@ private void FinishCollection()
         }
 
         collectionVisualActive = active;
-        spriteRenderer.color = active
+        ApplyVisualState();
+    }
+
+    private void ApplyVisualState()
+    {
+        if (spriteRenderer == null || !hasBaseVisualColor)
+        {
+            return;
+        }
+
+        Color color = collectionVisualActive
             ? new Color(
                 baseVisualColor.r * collectingShadeMultiplier,
                 baseVisualColor.g * collectingShadeMultiplier,
                 baseVisualColor.b * collectingShadeMultiplier,
                 baseVisualColor.a)
             : baseVisualColor;
+
+        if (!isPowered)
+        {
+            color = new Color(color.r * 0.34f, color.g * 0.34f, color.b * 0.34f, color.a);
+        }
+
+        spriteRenderer.color = color;
     }
 
     private void ApplyVelocity()
