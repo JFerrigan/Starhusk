@@ -441,8 +441,10 @@ public void ClearSelection()
             bodyStyle
         );
 
-        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 82f, panelRect.width - 24f, 18f), "Recipe: 25 Ore, 25 Copper, 25 Silicate", bodyStyle);
-        DrawStorageContents(factory.Storage, panelRect.y + 108f);
+        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 82f, panelRect.width - 24f, 18f), "Recipe Pools", bodyStyle);
+        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 104f, panelRect.width - 24f, 18f), "Ore: " + factory.OrePool + " / " + SatelliteFactory.OreCost, bodyStyle);
+        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 122f, panelRect.width - 24f, 18f), "Silicate: " + factory.SilicatePool + " / " + SatelliteFactory.SilicateCost, bodyStyle);
+        DrawStorageContents(factory.Storage, panelRect.y + 148f);
     }
 
     private void DrawStorageDropdown(Rect rect, string label, FreighterAutomaton freighter, ResourceStorage selectedStorageValue, bool isSource)

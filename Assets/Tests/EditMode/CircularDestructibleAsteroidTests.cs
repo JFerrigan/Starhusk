@@ -1,3 +1,4 @@
+#if UNITY_INCLUDE_TESTS
 using NUnit.Framework;
 using UnityEngine;
 
@@ -23,14 +24,13 @@ public class CircularDestructibleAsteroidTests
         PolygonCollider2D collider = asteroidObject.GetComponent<PolygonCollider2D>();
 
         float areaBefore = asteroid.CurrentArea;
-        int pathsBefore = collider.pathCount;
+        Assert.That(collider.pathCount, Is.LessThan(asteroid.CellCount));
 
         bool cutApplied = asteroid.ApplyCircularCut(new Vector2(5f, 0f), 2.5f, Vector2.right);
 
         Assert.IsTrue(cutApplied);
         Assert.That(asteroid.CurrentArea, Is.LessThan(areaBefore));
-        Assert.That(asteroid.CellCount, Is.LessThan(pathsBefore));
-        Assert.That(asteroidObject.GetComponent<PolygonCollider2D>().pathCount, Is.EqualTo(asteroid.CellCount));
+        Assert.That(asteroidObject.GetComponent<PolygonCollider2D>().pathCount, Is.LessThan(asteroid.CellCount));
     }
 
     [Test]
@@ -70,18 +70,12 @@ public class CircularDestructibleAsteroidTests
         GameObject asteroidObject = new GameObject(name);
         asteroidObject.transform.localScale = Vector3.one * 10f;
 
-        SpriteRenderer spriteRenderer = asteroidObject.AddComponent<SpriteRenderer>();
-        spriteRenderer.sprite = PlaceholderSprites.Asteroid;
-        spriteRenderer.color = ResourceVisuals.ColorFor(ResourceType.Ore);
-
-        CircleCollider2D circleCollider = asteroidObject.AddComponent<CircleCollider2D>();
-        circleCollider.radius = 0.5f;
-
         ResourceDeposit deposit = asteroidObject.AddComponent<ResourceDeposit>();
         deposit.ConfigureSingleResource(ResourceType.Ore, resourceAmount, 12);
         deposit.destroyWhenDepleted = false;
 
-        asteroidObject.AddComponent<CircularDestructibleAsteroid>();
+        CircularDestructibleAsteroid asteroid = asteroidObject.AddComponent<CircularDestructibleAsteroid>();
+        asteroid.SetTint(ResourceVisuals.ColorFor(ResourceType.Ore));
         return asteroidObject;
     }
 
@@ -147,3 +141,4 @@ public class CircularDestructibleAsteroidTests
         }
     }
 }
+#endif

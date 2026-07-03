@@ -1,3 +1,4 @@
+#if UNITY_INCLUDE_TESTS
 using NUnit.Framework;
 using UnityEngine;
 
@@ -328,3 +329,4 @@ public class BuildingSystemTests
         return buildingObject;
     }
 }
+#endif

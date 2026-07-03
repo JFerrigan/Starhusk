@@ -1,3 +1,4 @@
+#if UNITY_INCLUDE_TESTS
 using NUnit.Framework;
 using UnityEngine;
 
@@ -79,3 +80,4 @@ public class BasicMapControllerTests
         }
     }
 }
+#endif

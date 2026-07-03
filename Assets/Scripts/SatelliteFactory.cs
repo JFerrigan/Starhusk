@@ -4,8 +4,7 @@ using UnityEngine;
 public class SatelliteFactory : MonoBehaviour
 {
     public const int DefaultCapacity = 5000;
-    public const int OreCost = 25;
-    public const int CopperCost = 25;
+    public const int OreCost = 50;
     public const int SilicateCost = 25;
     public const float DefaultBuildDuration = 10f;
     public const float DefaultOrbitSpeedDegrees = 5f;
@@ -23,11 +22,19 @@ public class SatelliteFactory : MonoBehaviour
     [SerializeField]
     private int producedCount;
 
+    [SerializeField]
+    private int orePool;
+
+    [SerializeField]
+    private int silicatePool;
+
     private float buildCompleteTime;
 
     public ResourceStorage Storage => storage;
     public bool IsBuilding => isBuilding;
     public int ProducedCount => producedCount;
+    public int OrePool => orePool;
+    public int SilicatePool => silicatePool;
     public float BuildProgress
     {
         get
@@ -72,10 +79,10 @@ public class SatelliteFactory : MonoBehaviour
 
     public bool CanStartBuild()
     {
-        return storage != null &&
-            storage.GetAmount(ResourceType.Ore) >= OreCost &&
-            storage.GetAmount(ResourceType.Copper) >= CopperCost &&
-            storage.GetAmount(ResourceType.Silicate) >= SilicateCost;
+        IntakeDeliveredResources();
+
+        return orePool >= OreCost &&
+            silicatePool >= SilicateCost;
     }
 
     public bool TryStartBuild()
@@ -85,13 +92,60 @@ public class SatelliteFactory : MonoBehaviour
             return false;
         }
 
-        storage.RemoveResource(ResourceType.Ore, OreCost);
-        storage.RemoveResource(ResourceType.Copper, CopperCost);
-        storage.RemoveResource(ResourceType.Silicate, SilicateCost);
+        orePool -= OreCost;
+        silicatePool -= SilicateCost;
 
         isBuilding = true;
         buildCompleteTime = Time.time + Mathf.Max(0.01f, buildDuration);
         return true;
+    }
+
+    public int PoolAmountFor(ResourceType type)
+    {
+        switch (type)
+        {
+            case ResourceType.Silicate:
+                return silicatePool;
+            case ResourceType.Ore:
+                return orePool;
+            default:
+                return 0;
+        }
+    }
+
+    public int PoolCapacityFor(ResourceType type)
+    {
+        switch (type)
+        {
+            case ResourceType.Silicate:
+                return SilicateCost;
+            case ResourceType.Ore:
+                return OreCost;
+            default:
+                return 0;
+        }
+    }
+
+    private void IntakeDeliveredResources()
+    {
+        if (storage == null)
+        {
+            return;
+        }
+
+        FillPool(ResourceType.Ore, OreCost, ref orePool);
+        FillPool(ResourceType.Silicate, SilicateCost, ref silicatePool);
+    }
+
+    private void FillPool(ResourceType type, int capacity, ref int pool)
+    {
+        int needed = Mathf.Max(0, capacity - pool);
+        if (needed <= 0)
+        {
+            return;
+        }
+
+        pool += storage.RemoveResource(type, needed);
     }
 
     public DysonSatellite CompleteBuildNow()
@@ -166,7 +220,6 @@ public class SatelliteFactory : MonoBehaviour
             return new[]
             {
                 new ResourceStack(ResourceType.Ore, OreCost),
-                new ResourceStack(ResourceType.Copper, CopperCost),
                 new ResourceStack(ResourceType.Silicate, SilicateCost)
             };
         }

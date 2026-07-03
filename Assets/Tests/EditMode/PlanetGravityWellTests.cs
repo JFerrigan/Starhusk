@@ -1,3 +1,4 @@
+#if UNITY_INCLUDE_TESTS
 using NUnit.Framework;
 
 public class PlanetGravityWellTests
@@ -21,3 +22,4 @@ public class PlanetGravityWellTests
         Assert.That(nearEdge, Is.GreaterThan(0f));
     }
 }
+#endif

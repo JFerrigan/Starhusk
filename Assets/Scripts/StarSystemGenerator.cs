@@ -11,6 +11,9 @@ public class StarSystemGenerator : MonoBehaviour
     public int maxPlanets = 10;
     public int asteroidFieldCount = 3;
     public int asteroidsPerField = 16;
+    public int starterAsteroidCount = 2;
+    public float starterAsteroidMinDistance = 16f;
+    public float starterAsteroidMaxDistance = 32f;
     public int stationaryDysonSatelliteCount = 2;
     public int dynamicDysonSatelliteCount = 1;
     public float celestialScaleMultiplier = 10f;
@@ -42,6 +45,7 @@ public class StarSystemGenerator : MonoBehaviour
         CurrentLayout = GenerateLayout(seed, systemRadius, minPlanets, maxPlanets, asteroidFieldCount, asteroidsPerField, worldScaleMultiplier, stationaryDysonSatelliteCount, dynamicDysonSatelliteCount);
         BuildLayout(CurrentLayout);
         SpawnPlayerNearMainPlanet(CurrentLayout);
+        SpawnStarterAsteroidsNearPlayer(CurrentLayout);
     }
 
     public static StarSystemLayout GenerateLayout(
@@ -153,11 +157,7 @@ deposit.destroyWhenDepleted = false;
         for (int i = 0; i < layout.asteroids.Count; i++)
         {
             CelestialBodyDefinition body = layout.asteroids[i];
-            GameObject asteroid = BuildSpriteObject(body.name, body.position, body.radius * celestialScaleMultiplier, ResourceColor(body.primaryResource), body.discoveredAtStart, MapMarkerType.Asteroid, body.radius);
-            ResourceDeposit deposit = asteroid.AddComponent<ResourceDeposit>();
-deposit.ConfigureSingleResource(body.primaryResource, body.resourceAmount, 12);
-deposit.destroyWhenDepleted = false;
-asteroid.AddComponent<CircularDestructibleAsteroid>();
+            BuildAsteroidObject(body.name, body.position, body.radius, body.primaryResource, body.resourceAmount, body.discoveredAtStart);
         }
 
         BuildDysonSatellites(layout);
@@ -193,12 +193,42 @@ asteroid.AddComponent<CircularDestructibleAsteroid>();
         return instance;
     }
 
+    private GameObject BuildAsteroidObject(string asteroidName, Vector2 position, float baseRadius, ResourceType resourceType, int resourceAmount, bool discoveredAtStart)
+    {
+        Color color = ResourceColor(resourceType);
+        float visualRadius = baseRadius * celestialScaleMultiplier;
+
+        GameObject asteroid = new GameObject(asteroidName);
+        ObjectNamer.AssignIdentity(asteroid, asteroidName, ObjectIdentityCategory.Celestial);
+        asteroid.transform.SetParent(generatedRoot);
+        asteroid.transform.position = position;
+        asteroid.transform.localScale = Vector3.one * visualRadius;
+
+        DiscoveryState discovery = asteroid.AddComponent<DiscoveryState>();
+        discovery.SetDiscovered(discoveredAtStart);
+        discovery.passiveRevealRadius = Mathf.Max(4f, visualRadius + 3f);
+
+        MapMarker marker = asteroid.AddComponent<MapMarker>();
+        marker.markerType = MapMarkerType.Asteroid;
+        marker.markerColor = color;
+        marker.iconScale = Mathf.Max(0.75f, baseRadius * 0.45f);
+        marker.requireDiscovery = true;
+        marker.discoveryState = discovery;
+
+        ResourceDeposit deposit = asteroid.AddComponent<ResourceDeposit>();
+        deposit.ConfigureSingleResource(resourceType, resourceAmount, 12);
+        deposit.destroyWhenDepleted = false;
+        CircularDestructibleAsteroid destructible = asteroid.AddComponent<CircularDestructibleAsteroid>();
+        destructible.SetTint(color);
+        return asteroid;
+    }
+
     private static Sprite SpriteForMarker(MapMarkerType markerType)
     {
         switch (markerType)
         {
             case MapMarkerType.Asteroid:
-                return PlaceholderSprites.Asteroid;
+                return PlaceholderSprites.Circle;
             case MapMarkerType.DysonSatellite:
                 return PlaceholderSprites.DysonSatellite;
             case MapMarkerType.Planet:
@@ -566,6 +596,59 @@ private static void AddPlanetResource(List<ResourceStack> resources, ResourceTyp
     private static float RandomRange(System.Random random, float min, float max)
     {
         return min + ((float)random.NextDouble() * (max - min));
+    }
+
+    private void SpawnStarterAsteroidsNearPlayer(StarSystemLayout layout)
+    {
+        if (starterAsteroidCount <= 0 || layout == null || layout.planets == null || layout.planets.Count == 0)
+        {
+            return;
+        }
+
+        ResourceInventory player = FindFirstObjectByType<ResourceInventory>();
+        if (player == null)
+        {
+            return;
+        }
+
+        System.Random random = new System.Random(seed ^ 0x5f3759df);
+        Vector2 playerPosition = player.transform.position;
+        CelestialBodyDefinition mainPlanet = layout.planets[0];
+        float planetWorldRadius = mainPlanet.radius * celestialScaleMultiplier;
+        Vector2 awayFromPlanet = (playerPosition - mainPlanet.position).sqrMagnitude > 0.01f
+            ? (playerPosition - mainPlanet.position).normalized
+            : Vector2.up;
+
+        float minDistance = Mathf.Max(6f, starterAsteroidMinDistance);
+        float maxDistance = Mathf.Max(minDistance + 1f, starterAsteroidMaxDistance);
+
+        for (int i = 0; i < starterAsteroidCount; i++)
+        {
+            float orbitT = (i + 0.5f) / Mathf.Max(1, starterAsteroidCount);
+            float angle = (orbitT * Mathf.PI * 2f) + RandomRange(random, -0.28f, 0.28f);
+            Vector2 direction = Direction(angle);
+
+            if (Vector2.Dot(direction, awayFromPlanet) < -0.25f)
+            {
+                direction = Vector2.Reflect(direction, awayFromPlanet).normalized;
+            }
+
+            float distance = RandomRange(random, minDistance, maxDistance);
+            float baseRadius = RandomRange(random, 0.55f, 1.05f);
+            Vector2 position = playerPosition + (direction * distance);
+            float minimumPlanetDistance = planetWorldRadius + (baseRadius * celestialScaleMultiplier) + 7f;
+
+            if (Vector2.Distance(position, mainPlanet.position) < minimumPlanetDistance)
+            {
+                position = playerPosition + (awayFromPlanet * distance);
+                position += Vector2.Perpendicular(awayFromPlanet) * RandomRange(random, -10f, 10f);
+            }
+
+            ResourceType resourceType = RandomAsteroidResource(random);
+            int resourceAmount = random.Next(45, 130);
+            string asteroidName = "Starter Asteroid " + (i + 1).ToString("000");
+            BuildAsteroidObject(asteroidName, position, baseRadius, resourceType, resourceAmount, true);
+        }
     }
 
     private void SpawnPlayerNearMainPlanet(StarSystemLayout layout)

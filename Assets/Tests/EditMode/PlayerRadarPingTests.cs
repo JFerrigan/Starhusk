@@ -1,3 +1,4 @@
+#if UNITY_INCLUDE_TESTS
 using NUnit.Framework;
 using UnityEngine;
 
@@ -54,3 +55,4 @@ public class PlayerRadarPingTests
         Assert.That(up.y, Is.EqualTo(90f).Within(0.001f));
     }
 }
+#endif

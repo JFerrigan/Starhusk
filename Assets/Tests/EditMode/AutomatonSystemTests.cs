@@ -1,3 +1,4 @@
+#if UNITY_INCLUDE_TESTS
 using NUnit.Framework;
 using UnityEngine;
 
@@ -529,11 +530,39 @@ public class AutomatonSystemTests
         {
             SatelliteFactory factory = factoryObject.AddComponent<SatelliteFactory>();
             factory.Storage.AddResource(ResourceType.Ore, SatelliteFactory.OreCost);
-            factory.Storage.AddResource(ResourceType.Copper, SatelliteFactory.CopperCost);
 
             Assert.IsFalse(factory.CanStartBuild());
             Assert.IsFalse(factory.TryStartBuild());
             Assert.IsFalse(factory.IsBuilding);
+        }
+        finally
+        {
+            Object.DestroyImmediate(factoryObject);
+        }
+    }
+
+    [Test]
+    public void SatelliteFactoryTracksSeparateRecipePools()
+    {
+        GameObject factoryObject = new GameObject("Factory");
+
+        try
+        {
+            SatelliteFactory factory = factoryObject.AddComponent<SatelliteFactory>();
+            factory.Storage.AddResource(ResourceType.Ore, SatelliteFactory.OreCost);
+            factory.Storage.AddResource(ResourceType.Copper, 999);
+
+            Assert.IsFalse(factory.TryStartBuild());
+            Assert.That(factory.OrePool, Is.EqualTo(SatelliteFactory.OreCost));
+            Assert.That(factory.SilicatePool, Is.EqualTo(0));
+            Assert.That(factory.Storage.GetAmount(ResourceType.Copper), Is.EqualTo(999));
+
+            factory.Storage.AddResource(ResourceType.Silicate, SatelliteFactory.SilicateCost);
+
+            Assert.IsTrue(factory.TryStartBuild());
+            Assert.That(factory.OrePool, Is.EqualTo(0));
+            Assert.That(factory.SilicatePool, Is.EqualTo(0));
+            Assert.IsTrue(factory.IsBuilding);
         }
         finally
         {
@@ -551,14 +580,12 @@ public class AutomatonSystemTests
         {
             SatelliteFactory factory = factoryObject.AddComponent<SatelliteFactory>();
             factory.Storage.AddResource(ResourceType.Ore, SatelliteFactory.OreCost);
-            factory.Storage.AddResource(ResourceType.Copper, SatelliteFactory.CopperCost);
             factory.Storage.AddResource(ResourceType.Silicate, SatelliteFactory.SilicateCost);
 
             DysonSatellite satellite = factory.CompleteBuildNow();
 
             Assert.IsNotNull(satellite);
             Assert.That(factory.Storage.GetAmount(ResourceType.Ore), Is.EqualTo(0));
-            Assert.That(factory.Storage.GetAmount(ResourceType.Copper), Is.EqualTo(0));
             Assert.That(factory.Storage.GetAmount(ResourceType.Silicate), Is.EqualTo(0));
             Assert.That(factory.ProducedCount, Is.EqualTo(1));
             Assert.That(satellite.mode, Is.EqualTo(DysonSatelliteMode.Dynamic));
@@ -727,3 +754,4 @@ public class AutomatonSystemTests
         return false;
     }
 }
+#endif

@@ -1,3 +1,4 @@
+#if UNITY_INCLUDE_TESTS
 using NUnit.Framework;
 using UnityEngine;
 
@@ -214,3 +215,4 @@ public class StarSystemGeneratorTests
         Assert.IsFalse(DysonBeamNetwork.AreAligned(Vector2.zero, dynamicPosition, unalignedStation, 8f));
     }
 }
+#endif

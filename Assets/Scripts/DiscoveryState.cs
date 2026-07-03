@@ -5,11 +5,12 @@ public class DiscoveryState : MonoBehaviour
     public bool discovered;
     public float passiveRevealRadius = 5f;
 
-    private Renderer[] renderers;
+    private SpriteRenderer[] spriteRenderers;
+    private MeshRenderer[] meshRenderers;
 
     private void Awake()
     {
-        renderers = GetComponentsInChildren<Renderer>();
+        CacheRenderers();
         ApplyVisibility();
     }
 
@@ -47,23 +48,42 @@ public class DiscoveryState : MonoBehaviour
 
     private void ApplyVisibility()
     {
-        renderers = GetComponentsInChildren<Renderer>();
+        CacheRenderers();
 
-        if (renderers == null)
+        if (spriteRenderers != null)
         {
-            return;
-        }
-
-        for (int i = 0; i < renderers.Length; i++)
-        {
-            if (renderers[i] == null || renderers[i].material == null)
+            for (int i = 0; i < spriteRenderers.Length; i++)
             {
-                continue;
-            }
+                if (spriteRenderers[i] == null)
+                {
+                    continue;
+                }
 
-            Color color = renderers[i].material.color;
-            color.a = discovered ? 1f : 0.18f;
-            renderers[i].material.color = color;
+                Color color = spriteRenderers[i].color;
+                color.a = discovered ? 1f : 0.18f;
+                spriteRenderers[i].color = color;
+            }
         }
+
+        if (meshRenderers != null)
+        {
+            for (int i = 0; i < meshRenderers.Length; i++)
+            {
+                if (meshRenderers[i] == null || meshRenderers[i].sharedMaterial == null)
+                {
+                    continue;
+                }
+
+                Color color = meshRenderers[i].sharedMaterial.color;
+                color.a = discovered ? 1f : 0.18f;
+                meshRenderers[i].sharedMaterial.color = color;
+            }
+        }
+    }
+
+    private void CacheRenderers()
+    {
+        spriteRenderers = GetComponentsInChildren<SpriteRenderer>();
+        meshRenderers = GetComponentsInChildren<MeshRenderer>();
     }
 }

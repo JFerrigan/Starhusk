@@ -14,6 +14,7 @@ public class CircularDestructibleAsteroid : MonoBehaviour
     private PolygonCollider2D polygonCollider;
     private MeshFilter meshFilter;
     private MeshRenderer meshRenderer;
+    private SpriteRenderer spriteRenderer;
     private Color tint = Color.white;
     private float cellSize;
     private float lastImpactFlashUntil;
@@ -24,7 +25,7 @@ public class CircularDestructibleAsteroid : MonoBehaviour
     private void Awake()
     {
         deposit = GetComponent<ResourceDeposit>();
-        CaptureTintAndDisableSprite();
+        CacheSpriteRenderer();
         EnsureGeneratedShape();
         RebuildGeometry();
         ApplyDiscoveryVisibility();
@@ -39,11 +40,11 @@ public class CircularDestructibleAsteroid : MonoBehaviour
 
         if (Time.time < lastImpactFlashUntil)
         {
-            meshRenderer.material.color = WithDiscoveryAlpha(Color.Lerp(tint, Color.white, 0.55f));
+            SetMeshColor(WithDiscoveryAlpha(Color.Lerp(tint, Color.white, 0.55f)));
         }
         else
         {
-            meshRenderer.material.color = WithDiscoveryAlpha(tint);
+            SetMeshColor(WithDiscoveryAlpha(tint));
         }
     }
 
@@ -65,8 +66,15 @@ public class CircularDestructibleAsteroid : MonoBehaviour
         }
 
         deposit.ConfigureResourcesExact(resources, mineAmount);
-        CaptureTintAndDisableSprite();
+        CacheSpriteRenderer();
         RebuildGeometry();
+        ApplyDiscoveryVisibility();
+    }
+
+    public void SetTint(Color asteroidTint)
+    {
+        tint = asteroidTint;
+        SetMeshColor(WithDiscoveryAlpha(tint));
         ApplyDiscoveryVisibility();
     }
 
@@ -174,7 +182,11 @@ public class CircularDestructibleAsteroid : MonoBehaviour
 
     private void RebuildGeometry()
     {
-        EnsureMeshComponents();
+        if (!EnsureMeshComponents())
+        {
+            return;
+        }
+
         RemoveSolidCircleColliders();
 
         List<Vector3> vertices = new List<Vector3>(cells.Count * 4);
@@ -228,27 +240,193 @@ public class CircularDestructibleAsteroid : MonoBehaviour
             polygonCollider = gameObject.AddComponent<PolygonCollider2D>();
         }
 
-        polygonCollider.pathCount = Mathf.Max(1, cells.Count);
-
         if (cells.Count <= 0)
+        {
+            polygonCollider.pathCount = 1;
+            polygonCollider.SetPath(0, new Vector2[0]);
+            return;
+        }
+
+        List<Vector2[]> paths = BuildColliderPaths();
+        polygonCollider.pathCount = Mathf.Max(1, paths.Count);
+
+        if (paths.Count <= 0)
         {
             polygonCollider.SetPath(0, new Vector2[0]);
             return;
         }
 
-        int pathIndex = 0;
+        for (int i = 0; i < paths.Count; i++)
+        {
+            polygonCollider.SetPath(i, paths[i]);
+        }
+    }
+
+    private List<Vector2[]> BuildColliderPaths()
+    {
+        HashSet<BoundaryEdge> remainingEdges = BuildBoundaryEdges();
+        List<Vector2[]> paths = new List<Vector2[]>();
+
+        while (remainingEdges.Count > 0)
+        {
+            BoundaryEdge edge = default;
+            foreach (BoundaryEdge candidate in remainingEdges)
+            {
+                edge = candidate;
+                break;
+            }
+
+            Vector2Int start = edge.start;
+            List<Vector2> path = new List<Vector2>();
+            int safety = remainingEdges.Count + 1;
+
+            while (safety > 0 && remainingEdges.Remove(edge))
+            {
+                if (path.Count <= 0)
+                {
+                    path.Add(GridPointToLocal(edge.start));
+                }
+
+                path.Add(GridPointToLocal(edge.end));
+
+                if (edge.end == start)
+                {
+                    break;
+                }
+
+                if (!TryGetNextBoundaryEdge(edge.end, remainingEdges, out edge))
+                {
+                    break;
+                }
+
+                safety--;
+            }
+
+            RemoveDuplicateClosingPoint(path);
+            SimplifyStraightPathSegments(path);
+
+            if (path.Count >= 3)
+            {
+                paths.Add(path.ToArray());
+            }
+        }
+
+        return paths;
+    }
+
+    private HashSet<BoundaryEdge> BuildBoundaryEdges()
+    {
+        HashSet<BoundaryEdge> edges = new HashSet<BoundaryEdge>();
+
         foreach (Vector2Int cell in cells)
         {
-            Vector2 center = CellCenter(cell);
-            float half = cellSize * 0.5f;
-            polygonCollider.SetPath(pathIndex, new[]
+            Vector2Int bottomLeft = new Vector2Int(cell.x, cell.y);
+            Vector2Int bottomRight = new Vector2Int(cell.x + 1, cell.y);
+            Vector2Int topRight = new Vector2Int(cell.x + 1, cell.y + 1);
+            Vector2Int topLeft = new Vector2Int(cell.x, cell.y + 1);
+
+            if (!cells.Contains(cell + Vector2Int.down))
             {
-                new Vector2(center.x - half, center.y - half),
-                new Vector2(center.x + half, center.y - half),
-                new Vector2(center.x + half, center.y + half),
-                new Vector2(center.x - half, center.y + half)
-            });
-            pathIndex++;
+                edges.Add(new BoundaryEdge(bottomLeft, bottomRight));
+            }
+
+            if (!cells.Contains(cell + Vector2Int.right))
+            {
+                edges.Add(new BoundaryEdge(bottomRight, topRight));
+            }
+
+            if (!cells.Contains(cell + Vector2Int.up))
+            {
+                edges.Add(new BoundaryEdge(topRight, topLeft));
+            }
+
+            if (!cells.Contains(cell + Vector2Int.left))
+            {
+                edges.Add(new BoundaryEdge(topLeft, bottomLeft));
+            }
+        }
+
+        return edges;
+    }
+
+    private static bool TryGetNextBoundaryEdge(Vector2Int start, HashSet<BoundaryEdge> remainingEdges, out BoundaryEdge next)
+    {
+        foreach (BoundaryEdge edge in remainingEdges)
+        {
+            if (edge.start == start)
+            {
+                next = edge;
+                return true;
+            }
+        }
+
+        next = default;
+        return false;
+    }
+
+    private Vector2 GridPointToLocal(Vector2Int point)
+    {
+        return new Vector2(point.x * cellSize, point.y * cellSize);
+    }
+
+    private static void RemoveDuplicateClosingPoint(List<Vector2> path)
+    {
+        if (path.Count > 1 && (path[0] - path[path.Count - 1]).sqrMagnitude <= 0.000001f)
+        {
+            path.RemoveAt(path.Count - 1);
+        }
+    }
+
+    private static void SimplifyStraightPathSegments(List<Vector2> path)
+    {
+        if (path.Count < 4)
+        {
+            return;
+        }
+
+        for (int i = path.Count - 1; i >= 0; i--)
+        {
+            Vector2 previous = path[(i - 1 + path.Count) % path.Count];
+            Vector2 current = path[i];
+            Vector2 next = path[(i + 1) % path.Count];
+            Vector2 a = (current - previous).normalized;
+            Vector2 b = (next - current).normalized;
+
+            if (Mathf.Abs((a.x * b.y) - (a.y * b.x)) <= 0.0001f && Vector2.Dot(a, b) > 0.999f)
+            {
+                path.RemoveAt(i);
+            }
+        }
+    }
+
+    private struct BoundaryEdge
+    {
+        public readonly Vector2Int start;
+        public readonly Vector2Int end;
+
+        public BoundaryEdge(Vector2Int start, Vector2Int end)
+        {
+            this.start = start;
+            this.end = end;
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (!(obj is BoundaryEdge))
+            {
+                return false;
+            }
+
+            BoundaryEdge other = (BoundaryEdge)obj;
+            return start == other.start && end == other.end;
+        }
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                return (start.GetHashCode() * 397) ^ end.GetHashCode();
+            }
         }
     }
 
@@ -501,12 +679,17 @@ public class CircularDestructibleAsteroid : MonoBehaviour
         return allocations;
     }
 
-    private void EnsureMeshComponents()
+    private bool EnsureMeshComponents()
     {
         meshFilter = GetComponent<MeshFilter>();
         if (meshFilter == null)
         {
             meshFilter = gameObject.AddComponent<MeshFilter>();
+        }
+
+        if (meshFilter == null)
+        {
+            return false;
         }
 
         meshRenderer = GetComponent<MeshRenderer>();
@@ -515,23 +698,46 @@ public class CircularDestructibleAsteroid : MonoBehaviour
             meshRenderer = gameObject.AddComponent<MeshRenderer>();
         }
 
+        if (meshRenderer == null)
+        {
+            return false;
+        }
+
         if (meshRenderer.sharedMaterial == null)
         {
             Shader shader = Shader.Find("Sprites/Default");
-            meshRenderer.sharedMaterial = new Material(shader);
+            if (shader == null)
+            {
+                shader = Shader.Find("Universal Render Pipeline/Unlit");
+            }
+
+            if (shader == null)
+            {
+                shader = Shader.Find("Unlit/Color");
+            }
+
+            if (shader != null)
+            {
+                meshRenderer.sharedMaterial = new Material(shader);
+            }
         }
 
-        meshRenderer.material.color = tint;
+        SetMeshColor(tint);
         meshRenderer.sortingOrder = meshSortingOrder;
+        if (spriteRenderer != null)
+        {
+            DestroyComponent(spriteRenderer);
+            spriteRenderer = null;
+        }
+        return true;
     }
 
-    private void CaptureTintAndDisableSprite()
+    private void CacheSpriteRenderer()
     {
-        SpriteRenderer spriteRenderer = GetComponent<SpriteRenderer>();
+        spriteRenderer = GetComponent<SpriteRenderer>();
         if (spriteRenderer != null)
         {
             tint = spriteRenderer.color;
-            spriteRenderer.enabled = false;
         }
     }
 
@@ -549,6 +755,16 @@ public class CircularDestructibleAsteroid : MonoBehaviour
         DiscoveryState discovery = GetComponent<DiscoveryState>();
         color.a = discovery == null || discovery.discovered ? tint.a : tint.a * 0.18f;
         return color;
+    }
+
+    private void SetMeshColor(Color color)
+    {
+        if (meshRenderer == null || meshRenderer.sharedMaterial == null)
+        {
+            return;
+        }
+
+        meshRenderer.sharedMaterial.color = color;
     }
 
     private void RemoveSolidCircleColliders()
