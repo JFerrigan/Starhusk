@@ -14,10 +14,12 @@ public class PlayerRadarPing : MonoBehaviour
     private readonly List<RadarContact> contacts = new List<RadarContact>();
     private LineRenderer pulseRenderer;
     private float lastPingTime = -999f;
-    private Vector2 nearestPlanetPosition;
-    private Vector2 nearestStarPosition;
-    private bool hasNearestPlanet;
-    private bool hasNearestStar;
+   private Vector2 nearestPlanetPosition;
+private Vector2 nearestStarPosition;
+private Vector2 nearestAsteroidPosition;
+private bool hasNearestPlanet;
+private bool hasNearestStar;
+private bool hasNearestAsteroid;
 
     public IReadOnlyList<RadarContact> ActiveContacts => contacts;
     public bool IsReady => IsReadyAtTime(Time.time, lastPingTime, cooldownSeconds);
@@ -52,11 +54,13 @@ public class PlayerRadarPing : MonoBehaviour
         lastPingTime = Time.time;
         contacts.Clear();
         hasNearestPlanet = false;
-        hasNearestStar = false;
+hasNearestStar = false;
+hasNearestAsteroid = false;
 
         MapMarker[] markers = FindObjectsByType<MapMarker>(FindObjectsSortMode.None);
         float nearestPlanetDistance = float.MaxValue;
-        float nearestStarDistance = float.MaxValue;
+float nearestStarDistance = float.MaxValue;
+float nearestAsteroidDistance = float.MaxValue;
 
         for (int i = 0; i < markers.Length; i++)
         {
@@ -80,18 +84,24 @@ public class PlayerRadarPing : MonoBehaviour
                 lastPingTime + contactDuration
             ));
 
-            if (marker.markerType == MapMarkerType.Planet && distance < nearestPlanetDistance)
-            {
-                nearestPlanetDistance = distance;
-                nearestPlanetPosition = marker.transform.position;
-                hasNearestPlanet = true;
-            }
-            else if (marker.markerType == MapMarkerType.Star && distance < nearestStarDistance)
-            {
-                nearestStarDistance = distance;
-                nearestStarPosition = marker.transform.position;
-                hasNearestStar = true;
-            }
+           if (marker.markerType == MapMarkerType.Asteroid && distance < nearestAsteroidDistance)
+{
+    nearestAsteroidDistance = distance;
+    nearestAsteroidPosition = marker.transform.position;
+    hasNearestAsteroid = true;
+}
+else if (marker.markerType == MapMarkerType.Planet && distance < nearestPlanetDistance)
+{
+    nearestPlanetDistance = distance;
+    nearestPlanetPosition = marker.transform.position;
+    hasNearestPlanet = true;
+}
+else if (marker.markerType == MapMarkerType.Star && distance < nearestStarDistance)
+{
+    nearestStarDistance = distance;
+    nearestStarPosition = marker.transform.position;
+    hasNearestStar = true;
+}
         }
 
         return contacts.Count;
@@ -105,17 +115,23 @@ public class PlayerRadarPing : MonoBehaviour
             return false;
         }
 
-        if (markerType == MapMarkerType.Planet && hasNearestPlanet)
-        {
-            worldPosition = nearestPlanetPosition;
-            return true;
-        }
+        if (markerType == MapMarkerType.Asteroid && hasNearestAsteroid)
+{
+    worldPosition = nearestAsteroidPosition;
+    return true;
+}
 
-        if (markerType == MapMarkerType.Star && hasNearestStar)
-        {
-            worldPosition = nearestStarPosition;
-            return true;
-        }
+if (markerType == MapMarkerType.Planet && hasNearestPlanet)
+{
+    worldPosition = nearestPlanetPosition;
+    return true;
+}
+
+if (markerType == MapMarkerType.Star && hasNearestStar)
+{
+    worldPosition = nearestStarPosition;
+    return true;
+}
 
         worldPosition = Vector2.zero;
         return false;

@@ -111,56 +111,132 @@ public class FoundationHud : MonoBehaviour
     }
 
     private void DrawRadarPointers()
+{
+    if (radarPing == null || inventory == null)
     {
-        if (radarPing == null || inventory == null)
-        {
-            return;
-        }
-
-        Vector2 planetPosition;
-        Vector2 starPosition;
-        bool hasPlanet = radarPing.TryGetPointer(MapMarkerType.Planet, out planetPosition);
-        bool hasStar = radarPing.TryGetPointer(MapMarkerType.Star, out starPosition);
-
-        if (!hasPlanet && !hasStar)
-        {
-            return;
-        }
-
-        if (hasPlanet)
-        {
-            DrawEdgePointer("PLANET", planetPosition, new Color(0.28f, 0.95f, 1f, 0.95f), 0f);
-        }
-
-        if (hasStar)
-        {
-            DrawEdgePointer("SUN", starPosition, new Color(1f, 0.76f, 0.22f, 0.95f), hasPlanet ? 24f : 0f);
-        }
+        return;
     }
 
-    private void DrawEdgePointer(string label, Vector2 targetPosition, Color color, float separation)
+    Vector2 asteroidPosition;
+    Vector2 planetPosition;
+    Vector2 starPosition;
+
+    bool hasAsteroid = radarPing.TryGetPointer(MapMarkerType.Asteroid, out asteroidPosition);
+    bool hasPlanet = radarPing.TryGetPointer(MapMarkerType.Planet, out planetPosition);
+    bool hasStar = radarPing.TryGetPointer(MapMarkerType.Star, out starPosition);
+
+    if (!hasAsteroid && !hasPlanet && !hasStar)
+    {
+        return;
+    }
+
+    float separation = 0f;
+
+    if (hasAsteroid)
+    {
+        DrawEdgePointer("ROCK", asteroidPosition, new Color(0.95f, 0.78f, 0.42f, 0.95f), separation);
+        separation += 24f;
+    }
+
+    if (hasPlanet)
+    {
+        DrawEdgePointer("PLANET", planetPosition, new Color(0.28f, 0.95f, 1f, 0.95f), separation);
+        separation += 24f;
+    }
+
+    if (hasStar)
+    {
+        DrawEdgePointer("SUN", starPosition, new Color(1f, 0.76f, 0.22f, 0.95f), separation);
+    }
+}
+
+   private void DrawEdgePointer(string label, Vector2 targetPosition, Color color, float separation)
+{
+    Vector2 targetGuiPosition;
+    Vector2 direction;
+
+    if (TryWorldToGuiPosition(targetPosition, out targetGuiPosition))
+    {
+        if (IsGuiPointOnScreen(targetGuiPosition, 18f))
+        {
+            DrawOnScreenPointer(label, targetGuiPosition, color);
+            return;
+        }
+
+        Vector2 screenCenter = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+        direction = targetGuiPosition - screenCenter;
+    }
+    else
     {
         Vector2 worldDelta = targetPosition - (Vector2)inventory.transform.position;
-        Vector2 toTarget = new Vector2(worldDelta.x, -worldDelta.y);
-        if (toTarget.sqrMagnitude < 0.001f)
-        {
-            return;
-        }
-
-        Vector2 direction = toTarget.normalized;
-        Vector2 center = EdgePointerPosition(direction, Screen.width, Screen.height, 34f + separation);
-        Vector2 tip = center + (direction * 20f);
-        Vector2 left = tip - (direction * 8f) + new Vector2(-direction.y, direction.x) * 5f;
-        Vector2 right = tip - (direction * 8f) - new Vector2(-direction.y, direction.x) * 5f;
-        Rect labelRect = new Rect(center.x - 34f, center.y + 16f, 68f, 18f);
-
-        DrawRect(new Rect(center.x - 28f, center.y - 18f, 56f, 52f), new Color(0f, 0f, 0f, 0.52f));
-        DrawRectOutline(new Rect(center.x - 28f, center.y - 18f, 56f, 52f), color, 2f);
-        DrawLine(center - (direction * 10f), tip, color, 4f);
-        DrawLine(tip, left, color, 4f);
-        DrawLine(tip, right, color, 4f);
-        GUI.Label(labelRect, label, smallLabelStyle);
+        direction = new Vector2(worldDelta.x, -worldDelta.y);
     }
+
+    if (direction.sqrMagnitude < 0.001f)
+    {
+        return;
+    }
+
+    direction.Normalize();
+
+    Vector2 center = EdgePointerPosition(direction, Screen.width, Screen.height, 34f + separation);
+    Vector2 tip = center + (direction * 20f);
+    Vector2 left = tip - (direction * 8f) + new Vector2(-direction.y, direction.x) * 5f;
+    Vector2 right = tip - (direction * 8f) - new Vector2(-direction.y, direction.x) * 5f;
+    Rect labelRect = new Rect(center.x - 34f, center.y + 16f, 68f, 18f);
+
+    DrawRect(new Rect(center.x - 28f, center.y - 18f, 56f, 52f), new Color(0f, 0f, 0f, 0.52f));
+    DrawRectOutline(new Rect(center.x - 28f, center.y - 18f, 56f, 52f), color, 2f);
+    DrawLine(center - (direction * 10f), tip, color, 4f);
+    DrawLine(tip, left, color, 4f);
+    DrawLine(tip, right, color, 4f);
+    GUI.Label(labelRect, label, smallLabelStyle);
+}
+
+private bool TryWorldToGuiPosition(Vector2 worldPosition, out Vector2 guiPosition)
+{
+    guiPosition = Vector2.zero;
+
+    Camera camera = Camera.main;
+    if (camera == null)
+    {
+        return false;
+    }
+
+    Vector3 screenPosition = camera.WorldToScreenPoint(new Vector3(worldPosition.x, worldPosition.y, 0f));
+    if (screenPosition.z < 0f)
+    {
+        return false;
+    }
+
+    guiPosition = new Vector2(screenPosition.x, Screen.height - screenPosition.y);
+    return true;
+}
+
+private static bool IsGuiPointOnScreen(Vector2 guiPosition, float margin)
+{
+    return guiPosition.x >= margin &&
+           guiPosition.x <= Screen.width - margin &&
+           guiPosition.y >= margin &&
+           guiPosition.y <= Screen.height - margin;
+}
+
+private void DrawOnScreenPointer(string label, Vector2 center, Color color)
+{
+    float size = 28f;
+    Rect frameRect = new Rect(center.x - (size * 0.5f), center.y - (size * 0.5f), size, size);
+    Rect labelRect = new Rect(center.x - 34f, center.y - 34f, 68f, 18f);
+
+    DrawRect(new Rect(center.x - 20f, center.y - 20f, 40f, 40f), new Color(0f, 0f, 0f, 0.38f));
+    DrawRectOutline(frameRect, color, 2f);
+
+    DrawLine(new Vector2(center.x - 16f, center.y), new Vector2(center.x - 6f, center.y), color, 3f);
+    DrawLine(new Vector2(center.x + 6f, center.y), new Vector2(center.x + 16f, center.y), color, 3f);
+    DrawLine(new Vector2(center.x, center.y - 16f), new Vector2(center.x, center.y - 6f), color, 3f);
+    DrawLine(new Vector2(center.x, center.y + 6f), new Vector2(center.x, center.y + 16f), color, 3f);
+
+    GUI.Label(labelRect, label, smallLabelStyle);
+}
 
     public static Vector2 EdgePointerPosition(Vector2 direction, float screenWidth, float screenHeight, float margin)
     {

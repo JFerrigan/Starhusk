@@ -9,12 +9,11 @@ public class StarSystemGenerator : MonoBehaviour
     public float worldScaleMultiplier = 10f;
     public int minPlanets = 10;
     public int maxPlanets = 10;
-    public int asteroidFieldCount = 3;
-    public int asteroidsPerField = 16;
-    public int starterAsteroidCount = 2;
-    public float starterAsteroidMinDistance = 16f;
-    public float starterAsteroidMaxDistance = 32f;
-    public int stationaryDysonSatelliteCount = 2;
+   public int asteroidFieldCount = 7;
+public int asteroidsPerField = 28;
+public int starterAsteroidCount = 8;
+public float starterAsteroidMinDistance = 32f;
+public float starterAsteroidMaxDistance = 130f;    public int stationaryDysonSatelliteCount = 2;
     public int dynamicDysonSatelliteCount = 1;
     public float celestialScaleMultiplier = 10f;
     public Transform generatedRoot;
@@ -599,57 +598,104 @@ private static void AddPlanetResource(List<ResourceStack> resources, ResourceTyp
     }
 
     private void SpawnStarterAsteroidsNearPlayer(StarSystemLayout layout)
+{
+    if (starterAsteroidCount <= 0 || layout == null || layout.planets == null || layout.planets.Count == 0)
     {
-        if (starterAsteroidCount <= 0 || layout == null || layout.planets == null || layout.planets.Count == 0)
+        return;
+    }
+
+    ResourceInventory player = FindFirstObjectByType<ResourceInventory>();
+    if (player == null)
+    {
+        return;
+    }
+
+    System.Random random = new System.Random(seed ^ 0x5f3759df);
+    Vector2 playerPosition = player.transform.position;
+    CelestialBodyDefinition mainPlanet = layout.planets[0];
+    float planetWorldRadius = mainPlanet.radius * celestialScaleMultiplier;
+
+    Vector2 awayFromPlanet = (playerPosition - mainPlanet.position).sqrMagnitude > 0.01f
+        ? (playerPosition - mainPlanet.position).normalized
+        : Vector2.up;
+
+    Vector2 sideways = Vector2.Perpendicular(awayFromPlanet).normalized;
+
+    float minDistance = Mathf.Max(28f, starterAsteroidMinDistance);
+    float maxDistance = Mathf.Max(minDistance + 90f, starterAsteroidMaxDistance);
+
+    List<Vector2> placedPositions = new List<Vector2>();
+    List<float> placedWorldRadii = new List<float>();
+
+    for (int i = 0; i < starterAsteroidCount; i++)
+    {
+        float baseRadius = RandomRange(random, 0.55f, 1.05f);
+        float worldRadius = baseRadius * celestialScaleMultiplier;
+        Vector2 position = playerPosition + awayFromPlanet * RandomRange(random, minDistance, maxDistance);
+
+        bool foundPosition = false;
+
+        for (int attempt = 0; attempt < 80; attempt++)
         {
-            return;
-        }
+            float forwardDistance = RandomRange(random, minDistance, maxDistance);
+            float sideSpread = Mathf.Lerp(22f, 95f, (float)i / Mathf.Max(1, starterAsteroidCount - 1));
+            float sideOffset = RandomRange(random, -sideSpread, sideSpread);
 
-        ResourceInventory player = FindFirstObjectByType<ResourceInventory>();
-        if (player == null)
-        {
-            return;
-        }
+            // Bias starter asteroids into a loose fan in front of the player, away from the starter planet.
+            Vector2 candidate = playerPosition + (awayFromPlanet * forwardDistance) + (sideways * sideOffset);
 
-        System.Random random = new System.Random(seed ^ 0x5f3759df);
-        Vector2 playerPosition = player.transform.position;
-        CelestialBodyDefinition mainPlanet = layout.planets[0];
-        float planetWorldRadius = mainPlanet.radius * celestialScaleMultiplier;
-        Vector2 awayFromPlanet = (playerPosition - mainPlanet.position).sqrMagnitude > 0.01f
-            ? (playerPosition - mainPlanet.position).normalized
-            : Vector2.up;
-
-        float minDistance = Mathf.Max(6f, starterAsteroidMinDistance);
-        float maxDistance = Mathf.Max(minDistance + 1f, starterAsteroidMaxDistance);
-
-        for (int i = 0; i < starterAsteroidCount; i++)
-        {
-            float orbitT = (i + 0.5f) / Mathf.Max(1, starterAsteroidCount);
-            float angle = (orbitT * Mathf.PI * 2f) + RandomRange(random, -0.28f, 0.28f);
-            Vector2 direction = Direction(angle);
-
-            if (Vector2.Dot(direction, awayFromPlanet) < -0.25f)
+            float minimumPlanetDistance = planetWorldRadius + worldRadius + 12f;
+            if (Vector2.Distance(candidate, mainPlanet.position) < minimumPlanetDistance)
             {
-                direction = Vector2.Reflect(direction, awayFromPlanet).normalized;
+                continue;
             }
 
-            float distance = RandomRange(random, minDistance, maxDistance);
-            float baseRadius = RandomRange(random, 0.55f, 1.05f);
-            Vector2 position = playerPosition + (direction * distance);
-            float minimumPlanetDistance = planetWorldRadius + (baseRadius * celestialScaleMultiplier) + 7f;
-
-            if (Vector2.Distance(position, mainPlanet.position) < minimumPlanetDistance)
+            if (!IsStarterAsteroidPositionClear(candidate, worldRadius, placedPositions, placedWorldRadii))
             {
-                position = playerPosition + (awayFromPlanet * distance);
-                position += Vector2.Perpendicular(awayFromPlanet) * RandomRange(random, -10f, 10f);
+                continue;
             }
 
-            ResourceType resourceType = RandomAsteroidResource(random);
-            int resourceAmount = random.Next(45, 130);
-            string asteroidName = "Starter Asteroid " + (i + 1).ToString("000");
-            BuildAsteroidObject(asteroidName, position, baseRadius, resourceType, resourceAmount, true);
+            position = candidate;
+            foundPosition = true;
+            break;
+        }
+
+        if (!foundPosition)
+        {
+            float fallbackAngle = ((float)i / Mathf.Max(1, starterAsteroidCount)) * Mathf.PI * 2f;
+            float fallbackDistance = minDistance + (i * (worldRadius + 18f));
+            position = playerPosition
+                + (awayFromPlanet * fallbackDistance)
+                + (sideways * Mathf.Sin(fallbackAngle) * 80f);
+        }
+
+        placedPositions.Add(position);
+        placedWorldRadii.Add(worldRadius);
+
+        ResourceType resourceType = RandomAsteroidResource(random);
+        int resourceAmount = random.Next(45, 130);
+        string asteroidName = "Starter Asteroid " + (i + 1).ToString("000");
+        BuildAsteroidObject(asteroidName, position, baseRadius, resourceType, resourceAmount, true);
+    }
+}
+
+private static bool IsStarterAsteroidPositionClear(
+    Vector2 candidatePosition,
+    float candidateWorldRadius,
+    List<Vector2> placedPositions,
+    List<float> placedWorldRadii)
+{
+    for (int i = 0; i < placedPositions.Count; i++)
+    {
+        float requiredDistance = candidateWorldRadius + placedWorldRadii[i] + 16f;
+        if (Vector2.Distance(candidatePosition, placedPositions[i]) < requiredDistance)
+        {
+            return false;
         }
     }
+
+    return true;
+}
 
     private void SpawnPlayerNearMainPlanet(StarSystemLayout layout)
 {

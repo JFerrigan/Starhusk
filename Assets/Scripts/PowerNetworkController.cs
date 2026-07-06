@@ -5,11 +5,11 @@ public class PowerNetworkController : MonoBehaviour
 {
     public const int PowerPerActiveBeam = 100;
 
-    public float rebuildInterval = 0.25f;
-    public float sourceRange = PowerRelay.DefaultRange;
-    public Color powerLinkColor = new Color(1f, 0.9f, 0.22f, 0.9f);
-    public Color consumerLinkColor = new Color(0.42f, 1f, 0.92f, 0.75f);
-
+    public bool requirePower = false; // Keep off for now while prototyping.
+public float rebuildInterval = 0.25f;
+public float sourceRange = PowerRelay.DefaultRange;
+public Color powerLinkColor = new Color(1f, 0.9f, 0.22f, 0.9f);
+public Color consumerLinkColor = new Color(0.42f, 1f, 0.92f, 0.75f);
     private readonly List<PowerNode> nodes = new List<PowerNode>();
     private readonly List<PowerComponent> components = new List<PowerComponent>();
     private readonly List<PowerLink> visibleLinks = new List<PowerLink>();
@@ -190,45 +190,61 @@ public class PowerNetworkController : MonoBehaviour
         }
     }
 
-    private void AssignConsumers()
+   private void AssignConsumers()
+{
+    List<PowerConsumerEntry> consumers = FindConsumers();
+
+    for (int i = 0; i < consumers.Count; i++)
     {
-        List<PowerConsumerEntry> consumers = FindConsumers();
-        for (int i = 0; i < consumers.Count; i++)
+        int demand = Mathf.Max(0, consumers[i].consumer.PowerDemand);
+        TotalDemand += demand;
+
+        if (!requirePower)
+        {
+            consumers[i].consumer.SetPowered(true);
+            PoweredDemand += demand;
+        }
+        else
         {
             consumers[i].consumer.SetPowered(false);
-            TotalDemand += Mathf.Max(0, consumers[i].consumer.PowerDemand);
-        }
-
-        consumers.Sort(CompareConsumerEntries);
-
-        for (int componentIndex = 0; componentIndex < components.Count; componentIndex++)
-        {
-            PowerComponent component = components[componentIndex];
-            int remainingPower = component.generation;
-
-            for (int consumerIndex = 0; consumerIndex < consumers.Count; consumerIndex++)
-            {
-                PowerConsumerEntry entry = consumers[consumerIndex];
-                if (entry.assigned || !IsConsumerInComponentRange(entry.position, component, out Vector2 linkStart))
-                {
-                    continue;
-                }
-
-                int demand = Mathf.Max(0, entry.consumer.PowerDemand);
-                if (demand > remainingPower)
-                {
-                    continue;
-                }
-
-                remainingPower -= demand;
-                PoweredDemand += demand;
-                entry.consumer.SetPowered(true);
-                entry.assigned = true;
-                consumers[consumerIndex] = entry;
-                visibleLinks.Add(new PowerLink(linkStart, entry.position, consumerLinkColor));
-            }
         }
     }
+
+    if (!requirePower)
+    {
+        return;
+    }
+
+    consumers.Sort(CompareConsumerEntries);
+
+    for (int componentIndex = 0; componentIndex < components.Count; componentIndex++)
+    {
+        PowerComponent component = components[componentIndex];
+        int remainingPower = component.generation;
+
+        for (int consumerIndex = 0; consumerIndex < consumers.Count; consumerIndex++)
+        {
+            PowerConsumerEntry entry = consumers[consumerIndex];
+            if (entry.assigned || !IsConsumerInComponentRange(entry.position, component, out Vector2 linkStart))
+            {
+                continue;
+            }
+
+            int demand = Mathf.Max(0, entry.consumer.PowerDemand);
+            if (demand > remainingPower)
+            {
+                continue;
+            }
+
+            remainingPower -= demand;
+            PoweredDemand += demand;
+            entry.consumer.SetPowered(true);
+            entry.assigned = true;
+            consumers[consumerIndex] = entry;
+            visibleLinks.Add(new PowerLink(linkStart, entry.position, consumerLinkColor));
+        }
+    }
+}
 
     private List<PowerConsumerEntry> FindConsumers()
     {
