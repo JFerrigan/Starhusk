@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class StarSystemGenerator : MonoBehaviour
 {
@@ -20,10 +21,42 @@ public float starterAsteroidMaxDistance = 130f;    public int stationaryDysonSat
 
     public StarSystemLayout CurrentLayout { get; private set; }
     public float EffectiveSystemRadius => systemRadius * worldScaleMultiplier;
+    public GameModeRules CurrentRules { get; private set; }
+
+    private bool rulesConfigured;
 
     private void Start()
     {
+        if (!rulesConfigured)
+        {
+            ApplyGameModeRules(GameModeRuntime.ResolveActiveRules(SceneManager.GetActiveScene().name));
+        }
+
         GenerateWorld();
+    }
+
+    public void ApplyGameModeRules(GameModeRules rules, Func<int> randomSeedProvider = null)
+    {
+        CurrentRules = rules != null ? rules.Clone() : GameModeCatalog.Create(GameModeId.Dev);
+        starterAsteroidCount = Mathf.Max(0, CurrentRules.starterAsteroidCount);
+        seed = ResolveSeed(CurrentRules, randomSeedProvider);
+        rulesConfigured = true;
+    }
+
+    public static int ResolveSeed(GameModeRules rules, Func<int> randomSeedProvider = null)
+    {
+        if (rules == null)
+        {
+            return GameModeCatalog.DefaultDevSeed;
+        }
+
+        if (!rules.useRandomSeed)
+        {
+            return rules.fixedSeed;
+        }
+
+        Func<int> provider = randomSeedProvider ?? GameSeedProvider.NextSeed;
+        return provider();
     }
 
     public void GenerateWorld()

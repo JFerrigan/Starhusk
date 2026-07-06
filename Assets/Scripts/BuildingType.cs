@@ -3,5 +3,8 @@ public enum BuildingType
     Mine,
     Condenser,
     Harvester,
-    Dredger
+    Dredger,
+    Ping3Asteroids,
+    PingAsteroidResourceType,
+    Ping10Asteroids
 }

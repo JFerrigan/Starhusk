@@ -5,7 +5,7 @@ public class PowerNetworkController : MonoBehaviour
 {
     public const int PowerPerActiveBeam = 100;
 
-    public bool requirePower = false; // Keep off for now while prototyping.
+    public bool requirePower = false;
 public float rebuildInterval = 0.25f;
 public float sourceRange = PowerRelay.DefaultRange;
 public Color powerLinkColor = new Color(1f, 0.9f, 0.22f, 0.9f);

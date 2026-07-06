@@ -3,6 +3,7 @@ using UnityEngine;
 public struct BuildingDefinition
 {
     public string displayName;
+    public BuildingCategory category;
     public Sprite placeholderSprite;
     public Color tint;
     public float visualScale;
@@ -12,10 +13,27 @@ public struct BuildingDefinition
     public float extractionInterval;
     public ResourceType? requiredResourceType;
     public ResourceStack[] buildCost;
+    public UpgradeId? upgradeId;
+
+    public bool IsUpgrade => upgradeId.HasValue;
+    public bool IsExtractor => !upgradeId.HasValue;
 }
 
 public static class BuildingCatalog
 {
+    private static readonly BuildingType[] OrderedPlanetBuildings =
+    {
+        BuildingType.Mine,
+        BuildingType.Ping3Asteroids,
+        BuildingType.PingAsteroidResourceType,
+        BuildingType.Ping10Asteroids,
+        BuildingType.Condenser,
+        BuildingType.Harvester,
+        BuildingType.Dredger
+    };
+
+    public static System.Collections.Generic.IReadOnlyList<BuildingType> AllPlanetBuildings => OrderedPlanetBuildings;
+
     public static BuildingDefinition GetDefinition(BuildingType buildingType)
     {
         switch (buildingType)
@@ -24,6 +42,7 @@ public static class BuildingCatalog
                 return new BuildingDefinition
                 {
                     displayName = "Condenser T1",
+                    category = BuildingCategory.Harvest,
                     placeholderSprite = PlaceholderSprites.Condenser,
                     tint = new Color(0.46f, 0.86f, 1f, 1f),
                     visualScale = 6f,
@@ -38,6 +57,7 @@ public static class BuildingCatalog
                 return new BuildingDefinition
                 {
                     displayName = "Harvester T1",
+                    category = BuildingCategory.Harvest,
                     placeholderSprite = PlaceholderSprites.Harvester,
                     tint = new Color(0.46f, 1f, 0.7f, 1f),
                     visualScale = 6f,
@@ -52,6 +72,7 @@ public static class BuildingCatalog
                 return new BuildingDefinition
                 {
                     displayName = "Dredger T1",
+                    category = BuildingCategory.Harvest,
                     placeholderSprite = PlaceholderSprites.Dredger,
                     tint = new Color(0.98f, 0.78f, 0.42f, 1f),
                     visualScale = 6f,
@@ -62,11 +83,54 @@ public static class BuildingCatalog
                     requiredResourceType = ResourceType.Silicate,
                     buildCost = Cost(new ResourceStack(ResourceType.Ore, 5))
                 };
+            case BuildingType.Ping3Asteroids:
+                return new BuildingDefinition
+                {
+                    displayName = "Ping 3 Asteroids",
+                    category = BuildingCategory.Fabrication,
+                    placeholderSprite = PlaceholderSprites.CollectorHub,
+                    tint = new Color(0.56f, 0.92f, 1f, 1f),
+                    visualScale = 5.5f,
+                    colliderRadius = 0.44f,
+                    buildCost = Cost(new ResourceStack(ResourceType.Ore, 75)),
+                    upgradeId = UpgradeId.Ping3Asteroids
+                };
+            case BuildingType.PingAsteroidResourceType:
+                return new BuildingDefinition
+                {
+                    displayName = "Ping Asteroid Resource Type",
+                    category = BuildingCategory.Fabrication,
+                    placeholderSprite = PlaceholderSprites.CollectorHub,
+                    tint = new Color(0.82f, 0.58f, 1f, 1f),
+                    visualScale = 5.5f,
+                    colliderRadius = 0.44f,
+                    buildCost = Cost(
+                        new ResourceStack(ResourceType.Ore, 100),
+                        new ResourceStack(ResourceType.Copper, 60)),
+                    upgradeId = UpgradeId.PingAsteroidResourceType
+                };
+            case BuildingType.Ping10Asteroids:
+                return new BuildingDefinition
+                {
+                    displayName = "Ping 10 Asteroids",
+                    category = BuildingCategory.Fabrication,
+                    placeholderSprite = PlaceholderSprites.CollectorHub,
+                    tint = new Color(1f, 0.72f, 0.38f, 1f),
+                    visualScale = 5.5f,
+                    colliderRadius = 0.44f,
+                    buildCost = Cost(
+                        new ResourceStack(ResourceType.Ore, 150),
+                        new ResourceStack(ResourceType.Copper, 90),
+                        new ResourceStack(ResourceType.Silicate, 75),
+                        new ResourceStack(ResourceType.Ice, 50)),
+                    upgradeId = UpgradeId.Ping10Asteroids
+                };
             case BuildingType.Mine:
             default:
                 return new BuildingDefinition
                 {
                     displayName = "Mine T1",
+                    category = BuildingCategory.Harvest,
                     placeholderSprite = PlaceholderSprites.Mine,
                     tint = new Color(0.78f, 0.86f, 0.94f, 1f),
                     visualScale = 6f,
@@ -112,6 +176,12 @@ public static bool CanPlaceOnDeposit(BuildingType buildingType, ResourceDeposit 
     if (deposit == null)
     {
         return false;
+    }
+
+    BuildingDefinition definition = GetDefinition(buildingType);
+    if (definition.IsUpgrade)
+    {
+        return true;
     }
 
     return deposit.HasResource(RequiredResourceFor(buildingType));

@@ -12,6 +12,8 @@ public class PlayerRadarPing : MonoBehaviour
     private const int PulseSegments = 96;
 
     private readonly List<RadarContact> contacts = new List<RadarContact>();
+    private readonly List<AsteroidCandidate> asteroidCandidates = new List<AsteroidCandidate>();
+    private readonly List<Vector2> nearestAsteroidPositions = new List<Vector2>();
     private LineRenderer pulseRenderer;
     private float lastPingTime = -999f;
    private Vector2 nearestPlanetPosition;
@@ -53,6 +55,8 @@ private bool hasNearestAsteroid;
 
         lastPingTime = Time.time;
         contacts.Clear();
+        asteroidCandidates.Clear();
+        nearestAsteroidPositions.Clear();
         hasNearestPlanet = false;
 hasNearestStar = false;
 hasNearestAsteroid = false;
@@ -60,7 +64,6 @@ hasNearestAsteroid = false;
         MapMarker[] markers = FindObjectsByType<MapMarker>(FindObjectsSortMode.None);
         float nearestPlanetDistance = float.MaxValue;
 float nearestStarDistance = float.MaxValue;
-float nearestAsteroidDistance = float.MaxValue;
 
         for (int i = 0; i < markers.Length; i++)
         {
@@ -76,35 +79,100 @@ float nearestAsteroidDistance = float.MaxValue;
                 continue;
             }
 
-            contacts.Add(new RadarContact(
-                marker,
-                marker.transform.position,
-                marker.markerType,
-                marker.markerColor,
-                lastPingTime + contactDuration
-            ));
-
-           if (marker.markerType == MapMarkerType.Asteroid && distance < nearestAsteroidDistance)
+           if (marker.markerType == MapMarkerType.Asteroid)
 {
-    nearestAsteroidDistance = distance;
-    nearestAsteroidPosition = marker.transform.position;
-    hasNearestAsteroid = true;
+    asteroidCandidates.Add(new AsteroidCandidate(marker, distance));
 }
 else if (marker.markerType == MapMarkerType.Planet && distance < nearestPlanetDistance)
 {
+    AddContact(marker, false);
     nearestPlanetDistance = distance;
     nearestPlanetPosition = marker.transform.position;
     hasNearestPlanet = true;
 }
 else if (marker.markerType == MapMarkerType.Star && distance < nearestStarDistance)
 {
+    AddContact(marker, false);
     nearestStarDistance = distance;
     nearestStarPosition = marker.transform.position;
     hasNearestStar = true;
 }
+else
+{
+    AddContact(marker, false);
+}
         }
 
+        AddNearestAsteroidContacts();
         return contacts.Count;
+    }
+
+    private void AddNearestAsteroidContacts()
+    {
+        asteroidCandidates.Sort((left, right) => left.distance.CompareTo(right.distance));
+        int limit = Mathf.Min(AsteroidContactLimit(), asteroidCandidates.Count);
+        bool revealResourceType = IsUpgradeUnlocked(UpgradeId.PingAsteroidResourceType);
+
+        for (int i = 0; i < limit; i++)
+        {
+            MapMarker marker = asteroidCandidates[i].marker;
+            if (marker == null)
+            {
+                continue;
+            }
+
+            AddContact(marker, revealResourceType);
+            Vector2 position = marker.transform.position;
+            nearestAsteroidPositions.Add(position);
+            if (!hasNearestAsteroid)
+            {
+                nearestAsteroidPosition = position;
+                hasNearestAsteroid = true;
+            }
+        }
+    }
+
+    private void AddContact(MapMarker marker, bool revealResourceType)
+    {
+        ResourceType? resourceType = null;
+        if (revealResourceType)
+        {
+            ResourceDeposit deposit = marker.GetComponent<ResourceDeposit>();
+            if (deposit != null)
+            {
+                resourceType = deposit.resourceType;
+            }
+        }
+
+        contacts.Add(new RadarContact(
+            marker,
+            marker.transform.position,
+            marker.markerType,
+            marker.markerColor,
+            lastPingTime + contactDuration,
+            resourceType
+        ));
+    }
+
+    private static int AsteroidContactLimit()
+    {
+        if (IsUpgradeUnlocked(UpgradeId.Ping10Asteroids))
+        {
+            return 10;
+        }
+
+        if (IsUpgradeUnlocked(UpgradeId.Ping3Asteroids))
+        {
+            return 3;
+        }
+
+        return 1;
+    }
+
+    private static bool IsUpgradeUnlocked(UpgradeId upgradeId)
+    {
+        PlayerUpgradeState state = PlayerUpgradeState.Current;
+        return state != null && state.IsUnlocked(upgradeId);
     }
 
     public bool TryGetPointer(MapMarkerType markerType, out Vector2 worldPosition)
@@ -135,6 +203,26 @@ if (markerType == MapMarkerType.Star && hasNearestStar)
 
         worldPosition = Vector2.zero;
         return false;
+    }
+
+    public IReadOnlyList<Vector2> GetPointers(MapMarkerType markerType)
+    {
+        if (!HasActivePing)
+        {
+            return System.Array.Empty<Vector2>();
+        }
+
+        if (markerType == MapMarkerType.Asteroid)
+        {
+            return nearestAsteroidPositions;
+        }
+
+        if (TryGetPointer(markerType, out Vector2 pointer))
+        {
+            return new[] { pointer };
+        }
+
+        return System.Array.Empty<Vector2>();
     }
 
     public void PruneExpiredContacts(float now)
@@ -235,13 +323,27 @@ public struct RadarContact
     public MapMarkerType markerType;
     public Color color;
     public float expiresAt;
+    public ResourceType? resourceType;
 
-    public RadarContact(MapMarker marker, Vector2 worldPosition, MapMarkerType markerType, Color color, float expiresAt)
+    public RadarContact(MapMarker marker, Vector2 worldPosition, MapMarkerType markerType, Color color, float expiresAt, ResourceType? resourceType = null)
     {
         this.marker = marker;
         this.worldPosition = worldPosition;
         this.markerType = markerType;
         this.color = color;
         this.expiresAt = expiresAt;
+        this.resourceType = resourceType;
+    }
+}
+
+public struct AsteroidCandidate
+{
+    public MapMarker marker;
+    public float distance;
+
+    public AsteroidCandidate(MapMarker marker, float distance)
+    {
+        this.marker = marker;
+        this.distance = distance;
     }
 }

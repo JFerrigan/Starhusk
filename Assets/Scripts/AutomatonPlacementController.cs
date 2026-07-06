@@ -2,6 +2,17 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
+public enum AutomatonBuildOption
+{
+    Collector,
+    Hub,
+    Freighter,
+    FreighterCargoStorage,
+    SatelliteFactory,
+    StationarySatellite,
+    PowerRelay
+}
+
 public class AutomatonPlacementController : MonoBehaviour
 {
     public Key collectorPlacementKey = Key.Digit6;
@@ -31,6 +42,17 @@ public class AutomatonPlacementController : MonoBehaviour
     private bool waitingForMouseRelease;
 
     public bool IsPlacing => placementMode != PlacementMode.None;
+
+    public static readonly AutomatonBuildOption[] AllBuildOptions =
+    {
+        AutomatonBuildOption.Collector,
+        AutomatonBuildOption.Hub,
+        AutomatonBuildOption.Freighter,
+        AutomatonBuildOption.FreighterCargoStorage,
+        AutomatonBuildOption.SatelliteFactory,
+        AutomatonBuildOption.StationarySatellite,
+        AutomatonBuildOption.PowerRelay
+    };
 
     private void Awake()
     {
@@ -163,6 +185,56 @@ public class AutomatonPlacementController : MonoBehaviour
     public void BeginPowerRelayPlacement()
     {
         TogglePlacement(PlacementMode.PowerRelay);
+    }
+
+    public void BeginPlacement(AutomatonBuildOption option)
+    {
+        TogglePlacement(ModeFor(option));
+    }
+
+    public static string DisplayNameFor(AutomatonBuildOption option)
+    {
+        switch (option)
+        {
+            case AutomatonBuildOption.Hub:
+                return "Collector Hub";
+            case AutomatonBuildOption.Freighter:
+                return "Freighter";
+            case AutomatonBuildOption.FreighterCargoStorage:
+                return "Freighter Cargo Storage";
+            case AutomatonBuildOption.SatelliteFactory:
+                return "Satellite Factory";
+            case AutomatonBuildOption.StationarySatellite:
+                return "Stationary Satellite";
+            case AutomatonBuildOption.PowerRelay:
+                return "Relay";
+            case AutomatonBuildOption.Collector:
+            default:
+                return "Collector Automaton";
+        }
+    }
+
+    public static BuildingCategory CategoryFor(AutomatonBuildOption option)
+    {
+        switch (option)
+        {
+            case AutomatonBuildOption.SatelliteFactory:
+                return BuildingCategory.Fabrication;
+            case AutomatonBuildOption.StationarySatellite:
+            case AutomatonBuildOption.PowerRelay:
+                return BuildingCategory.Power;
+            case AutomatonBuildOption.Collector:
+            case AutomatonBuildOption.Hub:
+            case AutomatonBuildOption.Freighter:
+            case AutomatonBuildOption.FreighterCargoStorage:
+            default:
+                return BuildingCategory.Automata;
+        }
+    }
+
+    public static ResourceStack[] BuildCostFor(AutomatonBuildOption option)
+    {
+        return BuildCostFor(ModeFor(option));
     }
 
     private void SpawnCurrent(Vector2 worldPosition)
@@ -582,6 +654,28 @@ public class AutomatonPlacementController : MonoBehaviour
     private static ResourceStack[] Cost(params ResourceStack[] cost)
     {
         return cost;
+    }
+
+    private static PlacementMode ModeFor(AutomatonBuildOption option)
+    {
+        switch (option)
+        {
+            case AutomatonBuildOption.Hub:
+                return PlacementMode.Hub;
+            case AutomatonBuildOption.Freighter:
+                return PlacementMode.Freighter;
+            case AutomatonBuildOption.FreighterCargoStorage:
+                return PlacementMode.FreighterCargoStorage;
+            case AutomatonBuildOption.SatelliteFactory:
+                return PlacementMode.SatelliteFactory;
+            case AutomatonBuildOption.StationarySatellite:
+                return PlacementMode.StationarySatellite;
+            case AutomatonBuildOption.PowerRelay:
+                return PlacementMode.PowerRelay;
+            case AutomatonBuildOption.Collector:
+            default:
+                return PlacementMode.Collector;
+        }
     }
 
     public static bool IsValidSatelliteFactoryPosition(Vector2 worldPosition)

@@ -34,7 +34,7 @@ public class BasicMapController : MonoBehaviour
     {
         if (Keyboard.current != null && Keyboard.current.mKey.wasPressedThisFrame)
         {
-            fullMapOpen = !fullMapOpen;
+            ToggleFullMap();
         }
 
         if (generator == null)
@@ -68,19 +68,24 @@ public class BasicMapController : MonoBehaviour
         );
 
         DrawMap(minimapRect, minimapBackground, false);
+        DrawMapButton(new Rect(minimapRect.x, minimapRect.yMax + 6f, minimapRect.width, 24f));
 
         if (fullMapOpen)
         {
-            float size = Mathf.Min(Screen.width, Screen.height) - (fullMapMargin * 2f);
             Rect fullMapRect = new Rect(
-                (Screen.width - size) * 0.5f,
-                (Screen.height - size) * 0.5f,
-                size,
-                size
+                fullMapMargin,
+                fullMapMargin,
+                Mathf.Max(160f, Screen.width - (fullMapMargin * 2f)),
+                Mathf.Max(160f, Screen.height - (fullMapMargin * 2f))
             );
 
             DrawMap(fullMapRect, fullMapBackground, true);
         }
+    }
+
+    private void ToggleFullMap()
+    {
+        fullMapOpen = !fullMapOpen;
     }
 
     public static Vector2 WorldToMapPosition(Vector2 worldPosition, Rect mapRect, float systemRadius)
@@ -170,6 +175,20 @@ public class BasicMapController : MonoBehaviour
 
         DrawRect(new Rect(position.x - (size * 0.5f), position.y - (size * 0.5f), size, size), color);
         DrawRectOutline(new Rect(position.x - (size * 0.8f), position.y - (size * 0.8f), size * 1.6f, size * 1.6f), new Color(color.r, color.g, color.b, 0.45f), 1f);
+        if (contact.resourceType.HasValue)
+        {
+            GUI.Label(new Rect(position.x + size, position.y - 8f, 120f, 22f), contact.resourceType.Value.ToString(), labelStyle);
+        }
+    }
+
+    private void DrawMapButton(Rect rect)
+    {
+        DrawRect(rect, new Color(0.02f, 0.04f, 0.07f, 0.86f));
+        DrawRectOutline(rect, new Color(0.7f, 0.9f, 1f, 0.5f), 2f);
+        if (GUI.Button(rect, "[M] MAP"))
+        {
+            ToggleFullMap();
+        }
     }
 
     private Color RadarContactColor(RadarContact contact)

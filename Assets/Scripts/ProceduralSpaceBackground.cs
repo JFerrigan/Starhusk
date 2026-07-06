@@ -40,6 +40,12 @@ public class ProceduralSpaceBackground : MonoBehaviour
         attachedCamera.backgroundColor = new Color(0.005f, 0.007f, 0.018f);
         previousCameraPosition = transform.position;
 
+        StarSystemGenerator generator = FindFirstObjectByType<StarSystemGenerator>();
+        if (generator != null)
+        {
+            seed = generator.seed;
+        }
+
         BuildLayers();
         ResizeLayersToCamera();
     }

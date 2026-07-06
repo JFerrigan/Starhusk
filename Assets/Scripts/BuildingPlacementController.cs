@@ -185,7 +185,13 @@ public void BeginMove(PlanetResourceExtractorBuilding building)
         }
         else
         {
-            if (!BuildResourcePool.Spend(BuildingCatalog.GetDefinition(activeBuildingType).buildCost))
+            BuildingDefinition definition = BuildingCatalog.GetDefinition(activeBuildingType);
+            if (definition.IsUpgrade && IsUpgradeUnlocked(definition))
+            {
+                return;
+            }
+
+            if (!BuildResourcePool.Spend(definition.buildCost))
             {
                 return;
             }
@@ -220,6 +226,20 @@ public void BeginMove(PlanetResourceExtractorBuilding building)
         collider.radius = definition.colliderRadius;
 
         buildingObject.AddComponent<PlanetSurfaceAnchor>();
+        if (definition.IsUpgrade)
+        {
+            PlanetUpgradeBuilding upgradeBuilding = buildingObject.AddComponent<PlanetUpgradeBuilding>();
+            upgradeBuilding.Initialize(buildingType, definition.upgradeId.Value, planetTransform, surfaceNormal);
+
+            PlayerUpgradeState state = PlayerUpgradeState.Current;
+            if (state != null)
+            {
+                state.Unlock(definition.upgradeId.Value);
+            }
+
+            return;
+        }
+
         buildingObject.AddComponent<BuildingStorage>();
 
         PlanetResourceExtractorBuilding building = AddExtractorComponent(buildingObject, buildingType);
@@ -305,8 +325,24 @@ public void BeginMove(PlanetResourceExtractorBuilding building)
         return false;
     }
 
+    if (placementMode == PlacementMode.PlaceBuilding && IsUpgradeUnlocked(BuildingCatalog.GetDefinition(activeBuildingType)))
+    {
+        return false;
+    }
+
     return true;
 }
+
+    private static bool IsUpgradeUnlocked(BuildingDefinition definition)
+    {
+        if (!definition.upgradeId.HasValue)
+        {
+            return false;
+        }
+
+        PlayerUpgradeState state = PlayerUpgradeState.Current;
+        return state != null && state.IsUnlocked(definition.upgradeId.Value);
+    }
 
     private Vector2 CursorWorldPosition()
     {

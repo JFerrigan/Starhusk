@@ -1,10 +1,48 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class GameBootstrap : MonoBehaviour
 {
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-    private static void BootstrapScene()
+    private GameModeRules currentRules;
+    private static bool sceneLoadedHandlerRegistered;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetRuntimeState()
     {
+        sceneLoadedHandlerRegistered = false;
+    }
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    private static void RegisterSceneLoadedHandler()
+    {
+        if (sceneLoadedHandlerRegistered)
+        {
+            return;
+        }
+
+        SceneManager.sceneLoaded -= HandleSceneLoaded;
+        SceneManager.sceneLoaded += HandleSceneLoaded;
+        sceneLoadedHandlerRegistered = true;
+    }
+
+    private static void HandleSceneLoaded(Scene scene, LoadSceneMode loadSceneMode)
+    {
+        BootstrapScene(scene.name);
+    }
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    private static void BootstrapActiveScene()
+    {
+        BootstrapScene(SceneManager.GetActiveScene().name);
+    }
+
+    private static void BootstrapScene(string sceneName)
+    {
+        if (!ShouldBootstrapScene(sceneName))
+        {
+            return;
+        }
+
         if (FindFirstObjectByType<GameBootstrap>() != null)
         {
             return;
@@ -15,8 +53,22 @@ public class GameBootstrap : MonoBehaviour
         bootstrapObject.AddComponent<FoundationHud>();
     }
 
+    public static bool ShouldBootstrapScene(string sceneName)
+    {
+        return sceneName == GameModeCatalog.DevGameSceneName || sceneName == GameModeCatalog.RealGameSceneName;
+    }
+
     private void Awake()
     {
+        RunBootstrap();
+    }
+
+    public void RunBootstrap(GameModeRules modeRules = null)
+    {
+        currentRules = modeRules != null
+            ? modeRules.Clone()
+            : GameModeRuntime.ResolveActiveRules(SceneManager.GetActiveScene().name);
+
         EnsurePlayer();
         EnsureCompanionAutomaton();
         EnsureGenerator();
@@ -29,6 +81,7 @@ public class GameBootstrap : MonoBehaviour
         EnsureBuildingControllers();
         EnsureAutomatonControllers();
         EnsurePowerNetworkController();
+        EnsureIntroDialogueGate();
     }
 
     private void EnsurePlayer()
@@ -37,48 +90,49 @@ public class GameBootstrap : MonoBehaviour
         GameObject playerObject;
 
         if (inventory == null)
-{
-    playerObject = new GameObject("PlayerShip");
-    playerObject.transform.position = new Vector3(0f, -10f, 0f);
-    playerObject.transform.localScale = Vector3.one * 8f;
+        {
+            playerObject = new GameObject("PlayerShip");
+            playerObject.transform.position = new Vector3(0f, -10f, 0f);
+            playerObject.transform.localScale = Vector3.one * 8f;
 
-    Rigidbody2D createdRb = playerObject.AddComponent<Rigidbody2D>();
-    createdRb.gravityScale = 0f;
-    createdRb.linearDamping = 0f;
-    createdRb.angularDamping = 2f;
+            Rigidbody2D createdRb = playerObject.AddComponent<Rigidbody2D>();
+            createdRb.gravityScale = 0f;
+            createdRb.linearDamping = 0f;
+            createdRb.angularDamping = 2f;
 
-    playerObject.AddComponent<BoxCollider2D>();
-    playerObject.AddComponent<PlayerMovement>();
-    inventory = playerObject.AddComponent<ResourceInventory>();
-    playerObject.AddComponent<PlayerScanner>();
-}
-else
-{
-    playerObject = inventory.gameObject;
-}
+            playerObject.AddComponent<BoxCollider2D>();
+            playerObject.AddComponent<PlayerMovement>();
+            inventory = playerObject.AddComponent<ResourceInventory>();
+            playerObject.AddComponent<PlayerScanner>();
+        }
+        else
+        {
+            playerObject = inventory.gameObject;
+        }
 
-playerObject.transform.localScale = Vector3.one * 15f;
+        playerObject.transform.localScale = Vector3.one * 15f;
 
-SpriteRenderer renderer = EnsurePlayerVisual(playerObject);
-if (renderer == null)
-{
-    renderer = playerObject.AddComponent<SpriteRenderer>();
-}
+        SpriteRenderer renderer = EnsurePlayerVisual(playerObject);
+        if (renderer == null)
+        {
+            renderer = playerObject.AddComponent<SpriteRenderer>();
+        }
 
-renderer.sprite = LoadPlayerShipSprite();
-renderer.color = Color.white;
+        renderer.sprite = LoadPlayerShipSprite();
+        renderer.color = Color.white;
 
-BoxCollider2D box = playerObject.GetComponent<BoxCollider2D>();
-if (box == null)
-{
-    box = playerObject.AddComponent<BoxCollider2D>();
-}
+        BoxCollider2D box = playerObject.GetComponent<BoxCollider2D>();
+        if (box == null)
+        {
+            box = playerObject.AddComponent<BoxCollider2D>();
+        }
 
-if (renderer.sprite != null)
-{
-    box.size = renderer.sprite.bounds.size * 0.55f;
-    box.offset = Vector2.zero;
-}
+        if (renderer.sprite != null)
+        {
+            box.size = renderer.sprite.bounds.size * 0.55f;
+            box.offset = Vector2.zero;
+        }
+
         Rigidbody2D rb = playerObject.GetComponent<Rigidbody2D>();
         if (rb == null)
         {
@@ -109,7 +163,7 @@ if (renderer.sprite != null)
             inventory.gameObject.AddComponent<PlayerWeaponController>();
         }
 
-        EnsurePrototypeResources(inventory);
+        ApplyStartingResources(inventory, currentRules);
 
         if (inventory.GetComponent<ObjectIdentity>() == null)
         {
@@ -136,17 +190,23 @@ if (renderer.sprite != null)
         }
     }
 
-    private void EnsurePrototypeResources(ResourceInventory inventory)
+    public static void ApplyStartingResources(ResourceInventory inventory, GameModeRules rules)
     {
-        EnsureMinimumResource(inventory, ResourceType.Ore, 1000);
-        EnsureMinimumResource(inventory, ResourceType.Ice, 1000);
-        EnsureMinimumResource(inventory, ResourceType.Silicate, 1000);
-        EnsureMinimumResource(inventory, ResourceType.Copper, 1000);
-        EnsureMinimumResource(inventory, ResourceType.Biomass, 1000);
+        int minimum = rules == null ? 0 : Mathf.Max(0, rules.startingResourceAmountPerType);
+        EnsureMinimumResource(inventory, ResourceType.Ore, minimum);
+        EnsureMinimumResource(inventory, ResourceType.Ice, minimum);
+        EnsureMinimumResource(inventory, ResourceType.Silicate, minimum);
+        EnsureMinimumResource(inventory, ResourceType.Copper, minimum);
+        EnsureMinimumResource(inventory, ResourceType.Biomass, minimum);
     }
 
     private void EnsureCompanionAutomaton()
     {
+        if (currentRules == null || !currentRules.spawnStartingCompanion)
+        {
+            return;
+        }
+
         if (FindFirstObjectByType<CompanionAutomaton>() != null)
         {
             return;
@@ -171,7 +231,7 @@ if (renderer.sprite != null)
         marker.requireDiscovery = false;
     }
 
-    private void EnsureMinimumResource(ResourceInventory inventory, ResourceType type, int minimum)
+    private static void EnsureMinimumResource(ResourceInventory inventory, ResourceType type, int minimum)
     {
         if (inventory == null)
         {
@@ -187,13 +247,14 @@ if (renderer.sprite != null)
 
     private void EnsureGenerator()
     {
-        if (FindFirstObjectByType<StarSystemGenerator>() != null)
+        StarSystemGenerator generator = FindFirstObjectByType<StarSystemGenerator>();
+        if (generator == null)
         {
-            return;
+            GameObject generatorObject = new GameObject("StarSystemGenerator");
+            generator = generatorObject.AddComponent<StarSystemGenerator>();
         }
 
-        GameObject generatorObject = new GameObject("StarSystemGenerator");
-        generatorObject.AddComponent<StarSystemGenerator>();
+        generator.ApplyGameModeRules(currentRules);
     }
 
     private void EnsureCamera()
@@ -270,7 +331,18 @@ if (renderer.sprite != null)
 
     private void EnsureBuildOptionsMenu()
     {
-        if (FindFirstObjectByType<BuildOptionsMenu>() != null)
+        BuildOptionsMenu existingMenu = FindFirstObjectByType<BuildOptionsMenu>();
+        if (currentRules == null || !currentRules.showRepository)
+        {
+            if (existingMenu != null)
+            {
+                Destroy(existingMenu.gameObject);
+            }
+
+            return;
+        }
+
+        if (existingMenu != null)
         {
             return;
         }
@@ -325,13 +397,26 @@ if (renderer.sprite != null)
 
     private void EnsurePowerNetworkController()
     {
-        if (FindFirstObjectByType<PowerNetworkController>() != null)
+        PowerNetworkController controller = FindFirstObjectByType<PowerNetworkController>();
+        if (controller == null)
         {
-            return;
+            GameObject powerObject = new GameObject("PowerNetworkController");
+            controller = powerObject.AddComponent<PowerNetworkController>();
         }
 
-        GameObject powerObject = new GameObject("PowerNetworkController");
-        powerObject.AddComponent<PowerNetworkController>();
+        controller.requirePower = currentRules != null && currentRules.requirePower;
+    }
+
+    private void EnsureIntroDialogueGate()
+    {
+        IntroDialogueGate gate = FindFirstObjectByType<IntroDialogueGate>();
+        if (gate == null)
+        {
+            GameObject gateObject = new GameObject("IntroDialogueGate");
+            gate = gateObject.AddComponent<IntroDialogueGate>();
+        }
+
+        gate.Configure(currentRules != null && currentRules.requireIntroDialogue);
     }
 
     private static Sprite LoadPlayerShipSprite()
@@ -346,42 +431,36 @@ if (renderer.sprite != null)
         Debug.LogWarning("Could not find Assets/Resources/ship.png. Using placeholder ship sprite.");
         return PlaceholderSprites.Circle;
     }
-private static SpriteRenderer EnsurePlayerVisual(GameObject playerObject)
-{
-    // Remove the old SpriteRenderer from the root PlayerShip.
-    // We only want the child "ShipVisual" to draw the ship.
-    SpriteRenderer rootRenderer = playerObject.GetComponent<SpriteRenderer>();
-    if (rootRenderer != null)
+
+    private static SpriteRenderer EnsurePlayerVisual(GameObject playerObject)
     {
-        Object.Destroy(rootRenderer);
+        SpriteRenderer rootRenderer = playerObject.GetComponent<SpriteRenderer>();
+        if (rootRenderer != null)
+        {
+            Object.Destroy(rootRenderer);
+        }
+
+        Transform visualTransform = playerObject.transform.Find("ShipVisual");
+        if (visualTransform == null)
+        {
+            GameObject visualObject = new GameObject("ShipVisual");
+            visualObject.transform.SetParent(playerObject.transform, false);
+            visualTransform = visualObject.transform;
+        }
+
+        visualTransform.localPosition = Vector3.zero;
+        visualTransform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+        visualTransform.localScale = Vector3.one;
+
+        SpriteRenderer renderer = visualTransform.GetComponent<SpriteRenderer>();
+        if (renderer == null)
+        {
+            renderer = visualTransform.gameObject.AddComponent<SpriteRenderer>();
+        }
+
+        renderer.sprite = LoadPlayerShipSprite();
+        renderer.color = Color.white;
+        renderer.sortingOrder = 100;
+        return renderer;
     }
-
-    Transform visualTransform = playerObject.transform.Find("ShipVisual");
-
-    if (visualTransform == null)
-    {
-        GameObject visualObject = new GameObject("ShipVisual");
-        visualObject.transform.SetParent(playerObject.transform, false);
-        visualTransform = visualObject.transform;
-    }
-
-    visualTransform.localPosition = Vector3.zero;
-
-    // Rotate only the image, not the movement/collider root.
-    visualTransform.localRotation = Quaternion.Euler(0f, 0f, 90f);
-
-    visualTransform.localScale = Vector3.one;
-
-    SpriteRenderer renderer = visualTransform.GetComponent<SpriteRenderer>();
-    if (renderer == null)
-    {
-        renderer = visualTransform.gameObject.AddComponent<SpriteRenderer>();
-    }
-
-    renderer.sprite = LoadPlayerShipSprite();
-    renderer.color = Color.white;
-    renderer.sortingOrder = 100;
-
-    return renderer;
-}
 }

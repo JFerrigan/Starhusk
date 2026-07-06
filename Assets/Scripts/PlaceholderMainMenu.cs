@@ -1,5 +1,5 @@
-using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class PlaceholderMainMenu : MonoBehaviour
 {
@@ -9,9 +9,6 @@ public class PlaceholderMainMenu : MonoBehaviour
     public string gameTitle = "STARHUSK";
     public string tagline = "";
 
-    private bool menuOpen = true;
-    private float previousTimeScale = 1f;
-
     private Texture2D pixel;
     private Texture2D backgroundImage;
     private Font menuFont;
@@ -20,46 +17,75 @@ public class PlaceholderMainMenu : MonoBehaviour
     private GUIStyle taglineStyle;
     private GUIStyle buttonStyle;
     private GUIStyle smallStyle;
+    private static bool sceneLoadedHandlerRegistered;
 
-    private readonly List<MonoBehaviour> disabledBehaviours = new List<MonoBehaviour>();
+    public static string PrimaryButtonSceneName => GameModeCatalog.RealGameSceneName;
+    public static string DevButtonSceneName => GameModeCatalog.DevGameSceneName;
 
-    public static bool IsOpen { get; private set; }
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetRuntimeState()
+    {
+        sceneLoadedHandlerRegistered = false;
+    }
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    private static void RegisterSceneLoadedHandler()
+    {
+        if (sceneLoadedHandlerRegistered)
+        {
+            return;
+        }
+
+        SceneManager.sceneLoaded -= HandleSceneLoaded;
+        SceneManager.sceneLoaded += HandleSceneLoaded;
+        sceneLoadedHandlerRegistered = true;
+    }
+
+    private static void HandleSceneLoaded(Scene scene, LoadSceneMode loadSceneMode)
+    {
+        EnsureMenuExists(scene.name);
+    }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-    private static void EnsureMenuExists()
+    private static void EnsureMenuExistsForActiveScene()
     {
+        EnsureMenuExists(SceneManager.GetActiveScene().name);
+    }
+
+    private static void EnsureMenuExists(string sceneName)
+    {
+        if (sceneName != GameModeCatalog.MainMenuSceneName)
+        {
+            return;
+        }
+
         PlaceholderMainMenu existingMenu = FindFirstObjectByType<PlaceholderMainMenu>();
         if (existingMenu != null)
         {
             return;
         }
 
-        GameObject menuObject = new GameObject("Placeholder Main Menu");
+        GameObject menuObject = new GameObject("MainMenu");
         menuObject.AddComponent<PlaceholderMainMenu>();
     }
 
     private void Awake()
     {
+        if (SceneManager.GetActiveScene().name != GameModeCatalog.MainMenuSceneName)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
         pixel = Texture2D.whiteTexture;
         backgroundImage = Resources.Load<Texture2D>(BackgroundResourceName);
         menuFont = Resources.Load<Font>(FontResourceName);
 
         CreateNonSkinStyles();
-        OpenMenu();
-    }
-
-    private void OnDestroy()
-    {
-        RestoreGameplay();
     }
 
     private void OnGUI()
     {
-        if (!menuOpen)
-        {
-            return;
-        }
-
         GUI.depth = -1000;
 
         EnsureSkinStyles();
@@ -193,7 +219,14 @@ public class PlaceholderMainMenu : MonoBehaviour
 
         if (DrawMenuButton(new Rect(leftPadding, buttonY, buttonWidth, buttonHeight), "BEGIN"))
         {
-            StartGame();
+            StartGame(GameModeId.Real);
+        }
+
+        buttonY += buttonHeight + gap;
+
+        if (DrawMenuButton(new Rect(leftPadding, buttonY, buttonWidth, buttonHeight), "DEV MODE"))
+        {
+            StartGame(GameModeId.Dev);
         }
 
         buttonY += buttonHeight + gap;
@@ -202,7 +235,6 @@ public class PlaceholderMainMenu : MonoBehaviour
         {
             QuitGame();
         }
-
     }
 
     private bool DrawMenuButton(Rect rect, string label)
@@ -236,70 +268,10 @@ public class PlaceholderMainMenu : MonoBehaviour
         GUI.Label(rect, text, style);
     }
 
-    private void OpenMenu()
+    private static void StartGame(GameModeId modeId)
     {
-        menuOpen = true;
-        IsOpen = true;
-
-        previousTimeScale = Time.timeScale;
-        Time.timeScale = 0f;
-
-        FreezeGameplay();
-    }
-
-    private void StartGame()
-    {
-        menuOpen = false;
-        IsOpen = false;
-
-        RestoreGameplay();
-    }
-
-    private void FreezeGameplay()
-    {
-        disabledBehaviours.Clear();
-
-        MonoBehaviour[] behaviours = FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None);
-        for (int i = 0; i < behaviours.Length; i++)
-        {
-            MonoBehaviour behaviour = behaviours[i];
-
-            if (behaviour == null)
-            {
-                continue;
-            }
-
-            if (behaviour == this)
-            {
-                continue;
-            }
-
-            if (!behaviour.enabled)
-            {
-                continue;
-            }
-
-            behaviour.enabled = false;
-            disabledBehaviours.Add(behaviour);
-        }
-    }
-
-    private void RestoreGameplay()
-    {
-        for (int i = 0; i < disabledBehaviours.Count; i++)
-        {
-            MonoBehaviour behaviour = disabledBehaviours[i];
-
-            if (behaviour != null)
-            {
-                behaviour.enabled = true;
-            }
-        }
-
-        disabledBehaviours.Clear();
-
-        Time.timeScale = previousTimeScale <= 0f ? 1f : previousTimeScale;
-        IsOpen = false;
+        GameModeRuntime.SelectMode(modeId);
+        SceneManager.LoadScene(GameModeCatalog.SceneNameFor(modeId));
     }
 
     private void QuitGame()

@@ -117,11 +117,11 @@ public class FoundationHud : MonoBehaviour
         return;
     }
 
-    Vector2 asteroidPosition;
     Vector2 planetPosition;
     Vector2 starPosition;
 
-    bool hasAsteroid = radarPing.TryGetPointer(MapMarkerType.Asteroid, out asteroidPosition);
+    System.Collections.Generic.IReadOnlyList<Vector2> asteroidPositions = radarPing.GetPointers(MapMarkerType.Asteroid);
+    bool hasAsteroid = asteroidPositions.Count > 0;
     bool hasPlanet = radarPing.TryGetPointer(MapMarkerType.Planet, out planetPosition);
     bool hasStar = radarPing.TryGetPointer(MapMarkerType.Star, out starPosition);
 
@@ -134,8 +134,11 @@ public class FoundationHud : MonoBehaviour
 
     if (hasAsteroid)
     {
-        DrawEdgePointer("ROCK", asteroidPosition, new Color(0.95f, 0.78f, 0.42f, 0.95f), separation);
-        separation += 24f;
+        for (int i = 0; i < asteroidPositions.Count; i++)
+        {
+            DrawEdgePointer("ROCK", asteroidPositions[i], new Color(0.95f, 0.78f, 0.42f, 0.95f), separation);
+            separation += 24f;
+        }
     }
 
     if (hasPlanet)
