@@ -19,12 +19,15 @@ public class MapMarker : MonoBehaviour
     public float iconScale = 1f;
     public bool requireDiscovery = true;
     public DiscoveryState discoveryState;
+    public bool hiddenFromMapAndRadar;
+
+    public bool CanAppearOnMapAndRadar => !hiddenFromMapAndRadar;
 
     public bool IsVisible
     {
         get
         {
-            return !requireDiscovery || discoveryState == null || discoveryState.discovered;
+            return CanAppearOnMapAndRadar && (!requireDiscovery || discoveryState == null || discoveryState.discovered);
         }
     }
 

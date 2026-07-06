@@ -77,10 +77,12 @@ public class GameBootstrap : MonoBehaviour
         EnsureMapController();
         EnsureHoverNameDisplay();
         EnsureBuildOptionsMenu();
+        EnsureSettingsMenu();
         HideLegacyResourceUI();
         EnsureBuildingControllers();
         EnsureAutomatonControllers();
         EnsurePowerNetworkController();
+        EnsureDialogueController();
         EnsureIntroDialogueGate();
     }
 
@@ -351,6 +353,17 @@ public class GameBootstrap : MonoBehaviour
         buildOptionsObject.AddComponent<BuildOptionsMenu>();
     }
 
+    private void EnsureSettingsMenu()
+    {
+        if (FindFirstObjectByType<SettingsMenuController>() != null)
+        {
+            return;
+        }
+
+        GameObject settingsObject = new GameObject("SettingsMenuController");
+        settingsObject.AddComponent<SettingsMenuController>();
+    }
+
     private void HideLegacyResourceUI()
     {
         ResourceUI[] legacyResourceUis = FindObjectsByType<ResourceUI>(FindObjectsSortMode.None);
@@ -407,6 +420,17 @@ public class GameBootstrap : MonoBehaviour
         controller.requirePower = currentRules != null && currentRules.requirePower;
     }
 
+    private void EnsureDialogueController()
+    {
+        if (FindFirstObjectByType<DialogueController>() != null)
+        {
+            return;
+        }
+
+        GameObject dialogueObject = new GameObject("DialogueController");
+        dialogueObject.AddComponent<DialogueController>();
+    }
+
     private void EnsureIntroDialogueGate()
     {
         IntroDialogueGate gate = FindFirstObjectByType<IntroDialogueGate>();
@@ -416,7 +440,7 @@ public class GameBootstrap : MonoBehaviour
             gate = gateObject.AddComponent<IntroDialogueGate>();
         }
 
-        gate.Configure(currentRules != null && currentRules.requireIntroDialogue);
+        gate.Configure(currentRules != null && currentRules.requireIntroDialogue, FindFirstObjectByType<DialogueController>());
     }
 
     private static Sprite LoadPlayerShipSprite()

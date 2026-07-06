@@ -14,6 +14,7 @@ public class PlayerRadarPing : MonoBehaviour
     private readonly List<RadarContact> contacts = new List<RadarContact>();
     private readonly List<AsteroidCandidate> asteroidCandidates = new List<AsteroidCandidate>();
     private readonly List<Vector2> nearestAsteroidPositions = new List<Vector2>();
+    private readonly List<Vector2> visiblePointerBuffer = new List<Vector2>();
     private LineRenderer pulseRenderer;
     private float lastPingTime = -999f;
    private Vector2 nearestPlanetPosition;
@@ -73,6 +74,11 @@ float nearestStarDistance = float.MaxValue;
                 continue;
             }
 
+            if (!marker.CanAppearOnMapAndRadar)
+            {
+                continue;
+            }
+
             float distance = Vector2.Distance(transform.position, marker.transform.position);
             if (distance > pingRange)
             {
@@ -116,7 +122,7 @@ else
         for (int i = 0; i < limit; i++)
         {
             MapMarker marker = asteroidCandidates[i].marker;
-            if (marker == null)
+            if (marker == null || !marker.CanAppearOnMapAndRadar)
             {
                 continue;
             }
@@ -183,23 +189,15 @@ else
             return false;
         }
 
-        if (markerType == MapMarkerType.Asteroid && hasNearestAsteroid)
-{
-    worldPosition = nearestAsteroidPosition;
-    return true;
-}
-
-if (markerType == MapMarkerType.Planet && hasNearestPlanet)
-{
-    worldPosition = nearestPlanetPosition;
-    return true;
-}
-
-if (markerType == MapMarkerType.Star && hasNearestStar)
-{
-    worldPosition = nearestStarPosition;
-    return true;
-}
+        for (int i = 0; i < contacts.Count; i++)
+        {
+            RadarContact contact = contacts[i];
+            if (contact.markerType == markerType && IsContactAvailable(contact, Time.time))
+            {
+                worldPosition = contact.worldPosition;
+                return true;
+            }
+        }
 
         worldPosition = Vector2.zero;
         return false;
@@ -214,7 +212,17 @@ if (markerType == MapMarkerType.Star && hasNearestStar)
 
         if (markerType == MapMarkerType.Asteroid)
         {
-            return nearestAsteroidPositions;
+            visiblePointerBuffer.Clear();
+            for (int i = 0; i < contacts.Count; i++)
+            {
+                RadarContact contact = contacts[i];
+                if (contact.markerType == MapMarkerType.Asteroid && IsContactAvailable(contact, Time.time))
+                {
+                    visiblePointerBuffer.Add(contact.worldPosition);
+                }
+            }
+
+            return visiblePointerBuffer;
         }
 
         if (TryGetPointer(markerType, out Vector2 pointer))
@@ -229,7 +237,7 @@ if (markerType == MapMarkerType.Star && hasNearestStar)
     {
         for (int i = contacts.Count - 1; i >= 0; i--)
         {
-            if (!IsContactActive(now, contacts[i].expiresAt))
+            if (!IsContactAvailable(contacts[i], now))
             {
                 contacts.RemoveAt(i);
             }
@@ -254,6 +262,13 @@ if (markerType == MapMarkerType.Star && hasNearestStar)
     public static bool IsContactActive(float now, float expiresAt)
     {
         return now <= expiresAt;
+    }
+
+    public static bool IsContactAvailable(RadarContact contact, float now)
+    {
+        return IsContactActive(now, contact.expiresAt)
+            && contact.marker != null
+            && contact.marker.CanAppearOnMapAndRadar;
     }
 
     private void CreatePulseRenderer()

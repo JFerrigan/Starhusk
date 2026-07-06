@@ -118,6 +118,11 @@ public class BasicMapController : MonoBehaviour
                 continue;
             }
 
+            if (markers[i] != null && !markers[i].CanAppearOnMapAndRadar)
+            {
+                continue;
+            }
+
             DrawMarker(markers[i], rect, includeLabels);
         }
 
@@ -158,7 +163,7 @@ public class BasicMapController : MonoBehaviour
         for (int i = 0; i < contacts.Count; i++)
         {
             RadarContact contact = contacts[i];
-            if (!PlayerRadarPing.IsContactActive(Time.time, contact.expiresAt))
+            if (!PlayerRadarPing.IsContactAvailable(contact, Time.time))
             {
                 continue;
             }
@@ -213,6 +218,11 @@ public class BasicMapController : MonoBehaviour
     private void DrawMarker(MapMarker marker, Rect rect, bool includeLabels)
     {
         if (marker == null)
+        {
+            return;
+        }
+
+        if (!marker.CanAppearOnMapAndRadar)
         {
             return;
         }

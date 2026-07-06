@@ -9,6 +9,8 @@ public class PlayerMovement : MonoBehaviour
     public float reverseThrustMultiplier = 0.5f;
     public float brakeDeceleration = 28f;
     public float rotationResponsiveness = 12f;
+    public float simpleAcceleration = 80f;
+    public float simpleStopDeceleration = 80f;
 
     private Rigidbody2D rb;
     private float rotateInput;
@@ -79,7 +81,17 @@ public class PlayerMovement : MonoBehaviour
 
         rb.MoveRotation(rb.rotation + (currentRotationSpeed * Time.fixedDeltaTime));
 
-        if (!Mathf.Approximately(thrustInput, 0f))
+        if (GameSettings.MovementControl == MovementControlType.Simple)
+        {
+            rb.linearVelocity = CalculateSimpleVelocity(
+                rb.linearVelocity,
+                transform.up,
+                thrustInput,
+                simpleAcceleration,
+                simpleStopDeceleration,
+                Time.fixedDeltaTime);
+        }
+        else if (!Mathf.Approximately(thrustInput, 0f))
         {
             rb.AddForce(transform.up * thrustForce * thrustInput);
         }
@@ -92,5 +104,23 @@ public class PlayerMovement : MonoBehaviour
                 brakeDeceleration * Time.fixedDeltaTime
             );
         }
+    }
+
+    public static Vector2 CalculateSimpleVelocity(Vector2 currentVelocity, Vector2 forward, float thrustInput, float acceleration, float stopDeceleration, float deltaTime)
+    {
+        Vector2 normalizedForward = forward.sqrMagnitude > 0.0001f ? forward.normalized : Vector2.up;
+        float step = Mathf.Max(0f, deltaTime);
+        float speed = currentVelocity.magnitude;
+
+        if (Mathf.Approximately(thrustInput, 0f))
+        {
+            return Vector2.MoveTowards(
+                currentVelocity,
+                Vector2.zero,
+                Mathf.Max(0f, stopDeceleration) * step);
+        }
+
+        float signedSpeed = speed + (Mathf.Max(0f, acceleration) * Mathf.Clamp(thrustInput, -1f, 1f) * step);
+        return normalizedForward * signedSpeed;
     }
 }

@@ -65,27 +65,23 @@ public class FoundationHud : MonoBehaviour
         string scannerState = scanner == null || scanner.IsReady ? "Ready" : "Charging";
         int seed = generator == null ? 0 : generator.seed;
         float speed = playerMovement == null ? 0f : playerMovement.Speed;
-        int ore = BuildResourcePool.GetAvailable(ResourceType.Ore, inventory, BuildResourcePool.BuildRange);
-        int ice = BuildResourcePool.GetAvailable(ResourceType.Ice, inventory, BuildResourcePool.BuildRange);
-        int silicate = BuildResourcePool.GetAvailable(ResourceType.Silicate, inventory, BuildResourcePool.BuildRange);
-        int copper = BuildResourcePool.GetAvailable(ResourceType.Copper, inventory, BuildResourcePool.BuildRange);
-        int biomass = BuildResourcePool.GetAvailable(ResourceType.Biomass, inventory, BuildResourcePool.BuildRange);
-
         GUI.Label(
-            new Rect(12f, 12f, 560f, 100f),
+            new Rect(12f, 12f, 560f, 44f),
             "Seed " + seed +
-            "\nOre " + ore +
-            "  Ice " + ice +
-            "  Silicate " + silicate +
-            "  Copper " + copper +
-            "  Biomass " + biomass +
             "\nScanner " + scannerState +
             "  Speed " + speed.ToString("0.0"),
             labelStyle
         );
 
+        DrawHudResources(new Rect(12f, 60f, 560f, 28f));
         DrawRadarSlot(new Rect(12f, 104f, 64f, 64f));
         DrawRadarPointers();
+    }
+
+    private void DrawHudResources(Rect rect)
+    {
+        DrawRect(rect, new Color(0f, 0f, 0f, 0.58f));
+        ResourceGui.DrawAvailableResources(new Rect(rect.x + 6f, rect.y + 4f, rect.width - 12f, rect.height - 8f), smallLabelStyle);
     }
 
     private void DrawRadarSlot(Rect rect)

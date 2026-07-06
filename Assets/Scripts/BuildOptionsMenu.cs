@@ -1,42 +1,47 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 public class BuildOptionsMenu : MonoBehaviour
 {
-    private const float WindowWidth = 620f;
-    private const float WindowHeight = 520f;
     private const float HeaderHeight = 48f;
     private const float TabHeight = 42f;
-
+    private const float CardWidth = 148f;
+    private const float CardHeight = 172f;
+    private const float CardSpacing = 12f;
 
     private static readonly string[] TabNames = { "All", "Harvest", "Automata", "Fabrication", "Power" };
 
     private Rect windowRect;
-    private bool initializedPosition;
     private bool isOpen;
     private int selectedTab;
     private Vector2 scrollPosition;
-    private Texture2D pixel;
+    private readonly List<BuildMenuItem> visibleItems = new List<BuildMenuItem>();
     private GUIStyle titleStyle;
     private GUIStyle resourceStyle;
     private GUIStyle tabStyle;
-    private GUIStyle itemStyle;
+    private GUIStyle itemNameStyle;
     private GUIStyle costStyle;
+    private GUIStyle badgeStyle;
 
     public static Rect CurrentRect { get; private set; }
 
-    private void Awake()
+    private struct BuildMenuItem
     {
-        pixel = Texture2D.whiteTexture;
+        public string name;
+        public Sprite sprite;
+        public Color tint;
+        public ResourceStack[] cost;
+        public BuildingCategory category;
+        public bool affordable;
+        public bool unlocked;
+        public Action clickAction;
     }
+
     private void EnsureStyles()
     {
-        if (titleStyle != null &&
-            resourceStyle != null &&
-            tabStyle != null &&
-            itemStyle != null &&
-            costStyle != null)
+        if (titleStyle != null)
         {
             return;
         }
@@ -45,38 +50,51 @@ public class BuildOptionsMenu : MonoBehaviour
         {
             fontSize = 18,
             fontStyle = FontStyle.Bold,
-            normal = { textColor = Color.white }
+            normal = { textColor = Color.white },
+            alignment = TextAnchor.MiddleLeft
         };
 
         resourceStyle = new GUIStyle
         {
-            fontSize = 12,
+            fontSize = 11,
             fontStyle = FontStyle.Bold,
-            normal = { textColor = new Color(0.78f, 0.96f, 1f) }
+            normal = { textColor = new Color(0.82f, 0.98f, 1f, 1f) },
+            alignment = TextAnchor.MiddleLeft
         };
 
-        tabStyle = new GUIStyle(GUI.skin.button)
+        tabStyle = new GUIStyle(GUI.skin.label)
         {
             fontSize = 12,
-            fontStyle = FontStyle.Bold
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter,
+            normal = { textColor = Color.white }
         };
 
-        itemStyle = new GUIStyle(GUI.skin.button)
+        itemNameStyle = new GUIStyle
         {
-            alignment = TextAnchor.MiddleLeft,
-            fontSize = 13,
+            fontSize = 12,
             fontStyle = FontStyle.Bold,
-            padding = new RectOffset(10, 8, 4, 4)
+            alignment = TextAnchor.UpperCenter,
+            wordWrap = true,
+            normal = { textColor = Color.white }
         };
 
         costStyle = new GUIStyle
         {
-            fontSize = 11,
-            normal = { textColor = new Color(0.86f, 0.82f, 1f) },
-            alignment = TextAnchor.MiddleRight
+            fontSize = 10,
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleLeft,
+            normal = { textColor = new Color(0.9f, 0.88f, 1f, 1f) }
+        };
+
+        badgeStyle = new GUIStyle
+        {
+            fontSize = 10,
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter,
+            normal = { textColor = Color.white }
         };
     }
-
 
     private void Update()
     {
@@ -99,59 +117,45 @@ public class BuildOptionsMenu : MonoBehaviour
 
         EnsurePosition();
         CurrentRect = windowRect;
+        CollectVisibleItems();
 
-        DrawRect(windowRect, new Color(0.09f, 0.03f, 0.16f, 0.94f));
-        DrawRectOutline(windowRect, new Color(0.78f, 0.38f, 1f, 0.95f), 3f);
-        DrawRect(new Rect(windowRect.x, windowRect.y, windowRect.width, HeaderHeight), new Color(0.16f, 0.05f, 0.28f, 0.98f));
+        PixelUiSprites.Draw(windowRect, PixelUiFrame.Panel);
+        PixelUiSprites.Draw(new Rect(windowRect.x + 8f, windowRect.y + 8f, windowRect.width - 16f, HeaderHeight), PixelUiFrame.Header);
 
-        GUI.Label(new Rect(windowRect.x + 24f, windowRect.y + 14f, 420f, 32f), "BUILD MENU [I]", titleStyle);
-        DrawResources(new Rect(windowRect.x + 24f, windowRect.y + 62f, windowRect.width - 48f, 30f));
-        DrawTabs(new Rect(windowRect.x + 24f, windowRect.y + 108f, windowRect.width - 48f, TabHeight));
+        GUI.Label(new Rect(windowRect.x + 24f, windowRect.y + 18f, 420f, 28f), "BUILD MENU [I]", titleStyle);
+        DrawResources(new Rect(windowRect.x + 24f, windowRect.y + 66f, windowRect.width - 48f, 30f));
+        DrawTabs(new Rect(windowRect.x + 24f, windowRect.y + 110f, windowRect.width - 48f, TabHeight));
         DrawItems(new Rect(windowRect.x + 24f, windowRect.y + 164f, windowRect.width - 48f, windowRect.height - 188f));
     }
-    
 
     private void DrawOpenButton()
     {
-        Rect buttonRect = new Rect(16f, Screen.height - 58f, 190f, 42f);
+        Rect buttonRect = new Rect(16f, Screen.height - 58f, 184f, 42f);
+        bool hover = buttonRect.Contains(Event.current.mousePosition);
 
-        DrawRect(buttonRect, new Color(0.09f, 0.03f, 0.16f, 0.94f));
-        DrawRectOutline(buttonRect, new Color(0.78f, 0.38f, 1f, 0.95f), 2f);
-
-        if (GUI.Button(buttonRect, "BUILD / UPGRADES [I]", tabStyle))
+        PixelUiSprites.Draw(buttonRect, hover ? PixelUiFrame.ButtonHover : PixelUiFrame.Button);
+        if (GUI.Button(buttonRect, GUIContent.none, GUIStyle.none))
         {
             isOpen = true;
         }
+
+        GUI.Label(buttonRect, "[I] BUILD", tabStyle);
     }
-
-
 
     private void EnsurePosition()
     {
         float margin = 48f;
-
         windowRect = new Rect(
             margin,
             margin,
-            Mathf.Max(160f, Screen.width - (margin * 2f)),
-            Mathf.Max(160f, Screen.height - (margin * 2f))
-        );
-
-        initializedPosition = true;
+            Mathf.Max(340f, Screen.width - (margin * 2f)),
+            Mathf.Max(360f, Screen.height - (margin * 2f)));
     }
-
 
     private void DrawResources(Rect rect)
     {
-        string text =
-            "ORE " + BuildResourcePool.GetAvailable(ResourceType.Ore) +
-            "   ICE " + BuildResourcePool.GetAvailable(ResourceType.Ice) +
-            "   SILICATE " + BuildResourcePool.GetAvailable(ResourceType.Silicate) +
-            "   COPPER " + BuildResourcePool.GetAvailable(ResourceType.Copper) +
-            "   BIOMASS " + BuildResourcePool.GetAvailable(ResourceType.Biomass);
-
-        DrawRect(rect, new Color(0.02f, 0.01f, 0.04f, 0.72f));
-        GUI.Label(new Rect(rect.x + 8f, rect.y + 3f, rect.width - 16f, rect.height), text, resourceStyle);
+        PixelUiSprites.Draw(rect, PixelUiFrame.InnerPanel);
+        ResourceGui.DrawAvailableResources(new Rect(rect.x + 8f, rect.y + 4f, rect.width - 16f, rect.height - 8f), resourceStyle);
     }
 
     private void DrawTabs(Rect rect)
@@ -160,25 +164,122 @@ public class BuildOptionsMenu : MonoBehaviour
         for (int i = 0; i < TabNames.Length; i++)
         {
             Rect tabRect = new Rect(rect.x + (tabWidth * i), rect.y, tabWidth - 4f, rect.height);
-            Color color = i == selectedTab ? new Color(0.4f, 0.14f, 0.62f, 1f) : new Color(0.12f, 0.04f, 0.22f, 1f);
-            DrawRect(tabRect, color);
-            DrawRectOutline(tabRect, new Color(0.72f, 0.34f, 1f, 0.85f), 2f);
-            if (GUI.Button(tabRect, TabNames[i], tabStyle))
+            bool hover = tabRect.Contains(Event.current.mousePosition);
+            PixelUiFrame frame = i == selectedTab ? PixelUiFrame.TabActive : hover ? PixelUiFrame.TabHover : PixelUiFrame.Tab;
+
+            PixelUiSprites.Draw(tabRect, frame);
+            if (GUI.Button(tabRect, GUIContent.none, GUIStyle.none))
             {
                 selectedTab = i;
                 scrollPosition = Vector2.zero;
             }
+
+            GUI.Label(tabRect, TabNames[i].ToUpperInvariant(), tabStyle);
         }
     }
 
     private void DrawItems(Rect rect)
     {
-        DrawRect(rect, new Color(0.03f, 0.01f, 0.06f, 0.66f));
+        PixelUiSprites.Draw(rect, PixelUiFrame.InnerPanel);
 
-        Rect viewRect = new Rect(0f, 0f, rect.width - 20f, ContentHeight());
-        scrollPosition = GUI.BeginScrollView(rect, scrollPosition, viewRect);
+        Rect padded = new Rect(rect.x + 10f, rect.y + 10f, rect.width - 20f, rect.height - 20f);
+        float viewWidth = Mathf.Max(1f, padded.width - 20f);
+        float contentHeight = PixelUiSprites.GridContentHeight(visibleItems.Count, viewWidth, CardWidth, CardHeight, CardSpacing);
+        Rect viewRect = new Rect(0f, 0f, viewWidth, contentHeight);
 
-        float y = 0f;
+        scrollPosition = GUI.BeginScrollView(padded, scrollPosition, viewRect);
+
+        int columns = PixelUiSprites.GridColumnCount(viewWidth, CardWidth, CardSpacing);
+        float gridWidth = (columns * CardWidth) + ((columns - 1) * CardSpacing);
+        float startX = Mathf.Max(0f, (viewWidth - gridWidth) * 0.5f);
+
+        for (int i = 0; i < visibleItems.Count; i++)
+        {
+            int column = i % columns;
+            int row = i / columns;
+            Rect cardRect = new Rect(
+                startX + (column * (CardWidth + CardSpacing)),
+                row * (CardHeight + CardSpacing),
+                CardWidth,
+                CardHeight);
+
+            DrawCard(cardRect, visibleItems[i]);
+        }
+
+        GUI.EndScrollView();
+    }
+
+    private void DrawCard(Rect rect, BuildMenuItem item)
+    {
+        bool enabled = !item.unlocked && item.affordable;
+        bool hover = rect.Contains(Event.current.mousePosition);
+        PixelUiFrame frame = item.unlocked
+            ? PixelUiFrame.CardUnlocked
+            : enabled
+                ? hover ? PixelUiFrame.CardHover : PixelUiFrame.Card
+                : PixelUiFrame.CardDisabled;
+
+        PixelUiSprites.Draw(rect, frame);
+
+        Rect spriteRect = new Rect(rect.x + 22f, rect.y + 16f, rect.width - 44f, 82f);
+        Rect nameRect = new Rect(rect.x + 10f, rect.y + 104f, rect.width - 20f, 34f);
+        Rect costRect = new Rect(rect.x + 10f, rect.y + 140f, rect.width - 20f, 22f);
+
+        DrawPreview(spriteRect, item.sprite, enabled || item.unlocked ? item.tint : Dim(item.tint));
+
+        GUI.Label(nameRect, item.name.ToUpperInvariant(), itemNameStyle);
+
+        if (item.unlocked)
+        {
+            Rect badgeRect = new Rect(rect.x + 25f, rect.y + 134f, rect.width - 50f, 24f);
+            PixelUiSprites.Draw(badgeRect, PixelUiFrame.Badge);
+            GUI.Label(badgeRect, "UNLOCKED", badgeStyle);
+        }
+        else
+        {
+            ResourceGui.DrawCostRow(costRect, item.cost, costStyle);
+            if (!item.affordable)
+            {
+                Rect badgeRect = new Rect(rect.x + rect.width - 64f, rect.y + 8f, 54f, 22f);
+                PixelUiSprites.Draw(badgeRect, PixelUiFrame.WarningBadge);
+                GUI.Label(badgeRect, "NO RES", badgeStyle);
+            }
+        }
+
+        GUI.enabled = enabled;
+        if (GUI.Button(rect, GUIContent.none, GUIStyle.none))
+        {
+            item.clickAction?.Invoke();
+            isOpen = false;
+        }
+
+        GUI.enabled = true;
+    }
+
+    private static void DrawPreview(Rect rect, Sprite sprite, Color tint)
+    {
+        if (sprite == null || sprite.texture == null)
+        {
+            return;
+        }
+
+        Rect textureRect = sprite.textureRect;
+        Rect uv = new Rect(
+            textureRect.x / sprite.texture.width,
+            textureRect.y / sprite.texture.height,
+            textureRect.width / sprite.texture.width,
+            textureRect.height / sprite.texture.height);
+
+        Color previous = GUI.color;
+        GUI.color = tint;
+        GUI.DrawTextureWithTexCoords(rect, sprite.texture, uv, true);
+        GUI.color = previous;
+    }
+
+    private void CollectVisibleItems()
+    {
+        visibleItems.Clear();
+
         IReadOnlyList<BuildingType> planetBuildings = BuildingCatalog.AllPlanetBuildings;
         for (int i = 0; i < planetBuildings.Count; i++)
         {
@@ -189,8 +290,18 @@ public class BuildOptionsMenu : MonoBehaviour
                 continue;
             }
 
-            DrawPlanetBuildingItem(new Rect(0f, y, viewRect.width, 42f), buildingType, definition);
-            y += 48f;
+            bool unlocked = definition.upgradeId.HasValue && IsUpgradeUnlocked(definition.upgradeId.Value);
+            visibleItems.Add(new BuildMenuItem
+            {
+                name = definition.displayName,
+                sprite = definition.placeholderSprite,
+                tint = definition.tint,
+                cost = definition.buildCost,
+                category = definition.category,
+                affordable = BuildResourcePool.CanAfford(definition.buildCost),
+                unlocked = unlocked,
+                clickAction = () => StartPlanetBuilding(buildingType)
+            });
         }
 
         AutomatonBuildOption[] automata = AutomatonPlacementController.AllBuildOptions;
@@ -203,87 +314,19 @@ public class BuildOptionsMenu : MonoBehaviour
                 continue;
             }
 
-            DrawAutomatonItem(new Rect(0f, y, viewRect.width, 42f), option);
-            y += 48f;
-        }
-
-        GUI.EndScrollView();
-    }
-
-    private void DrawPlanetBuildingItem(Rect rect, BuildingType buildingType, BuildingDefinition definition)
-    {
-        bool unlocked = definition.upgradeId.HasValue && IsUpgradeUnlocked(definition.upgradeId.Value);
-        bool affordable = BuildResourcePool.CanAfford(definition.buildCost);
-        bool enabled = !unlocked && affordable;
-        string status = unlocked ? "Unlocked" : CostText(definition.buildCost);
-
-        DrawItemFrame(rect, enabled, unlocked);
-        GUI.enabled = enabled;
-        if (GUI.Button(new Rect(rect.x + 4f, rect.y + 4f, rect.width - 8f, rect.height - 8f), definition.displayName, itemStyle))
-        {
-            StartPlanetBuilding(buildingType);
-            isOpen = false;
-        }
-        GUI.enabled = true;
-        GUI.Label(new Rect(rect.x + rect.width - 260f, rect.y + 9f, 246f, 24f), status, costStyle);
-    }
-
-    private void DrawAutomatonItem(Rect rect, AutomatonBuildOption option)
-    {
-        ResourceStack[] cost = AutomatonPlacementController.BuildCostFor(option);
-        bool affordable = BuildResourcePool.CanAfford(cost);
-
-        DrawItemFrame(rect, affordable, false);
-        GUI.enabled = affordable;
-        if (GUI.Button(new Rect(rect.x + 4f, rect.y + 4f, rect.width - 8f, rect.height - 8f), AutomatonPlacementController.DisplayNameFor(option), itemStyle))
-        {
-            AutomatonPlacementController controller = AutomatonPlacementController.Instance;
-            if (controller != null)
+            ResourceStack[] cost = AutomatonPlacementController.BuildCostFor(option);
+            visibleItems.Add(new BuildMenuItem
             {
-                controller.BeginPlacement(option);
-                isOpen = false;
-            }
+                name = AutomatonPlacementController.DisplayNameFor(option),
+                sprite = AutomatonPlacementController.SpriteFor(option),
+                tint = AutomatonPlacementController.ColorFor(option),
+                cost = cost,
+                category = category,
+                affordable = BuildResourcePool.CanAfford(cost),
+                unlocked = false,
+                clickAction = () => StartAutomaton(option)
+            });
         }
-        GUI.enabled = true;
-        GUI.Label(new Rect(rect.x + rect.width - 260f, rect.y + 9f, 246f, 24f), CostText(cost), costStyle);
-    }
-
-    private void DrawItemFrame(Rect rect, bool enabled, bool unlocked)
-    {
-        Color fill = unlocked
-            ? new Color(0.06f, 0.18f, 0.12f, 0.82f)
-            : enabled
-                ? new Color(0.11f, 0.05f, 0.18f, 0.9f)
-                : new Color(0.08f, 0.05f, 0.08f, 0.72f);
-        Color line = enabled
-            ? new Color(0.75f, 0.4f, 1f, 0.9f)
-            : new Color(0.45f, 0.34f, 0.52f, 0.74f);
-        DrawRect(rect, fill);
-        DrawRectOutline(rect, line, 2f);
-    }
-
-    private float ContentHeight()
-    {
-        int count = 0;
-        IReadOnlyList<BuildingType> planetBuildings = BuildingCatalog.AllPlanetBuildings;
-        for (int i = 0; i < planetBuildings.Count; i++)
-        {
-            if (IsVisibleInCurrentTab(BuildingCatalog.GetDefinition(planetBuildings[i]).category))
-            {
-                count++;
-            }
-        }
-
-        AutomatonBuildOption[] automata = AutomatonPlacementController.AllBuildOptions;
-        for (int i = 0; i < automata.Length; i++)
-        {
-            if (IsVisibleInCurrentTab(AutomatonPlacementController.CategoryFor(automata[i])))
-            {
-                count++;
-            }
-        }
-
-        return Mathf.Max(1, count) * 48f;
     }
 
     private bool IsVisibleInCurrentTab(BuildingCategory category)
@@ -302,27 +345,6 @@ public class BuildOptionsMenu : MonoBehaviour
         return state != null && state.IsUnlocked(upgradeId);
     }
 
-    private static string CostText(ResourceStack[] cost)
-    {
-        if (cost == null || cost.Length <= 0)
-        {
-            return "Free";
-        }
-
-        string text = string.Empty;
-        for (int i = 0; i < cost.Length; i++)
-        {
-            if (i > 0)
-            {
-                text += " + ";
-            }
-
-            text += cost[i].amount + " " + cost[i].type;
-        }
-
-        return text;
-    }
-
     private static void StartPlanetBuilding(BuildingType buildingType)
     {
         BuildingPlacementController controller = BuildingPlacementController.Instance;
@@ -332,24 +354,22 @@ public class BuildOptionsMenu : MonoBehaviour
         }
     }
 
+    private static void StartAutomaton(AutomatonBuildOption option)
+    {
+        AutomatonPlacementController controller = AutomatonPlacementController.Instance;
+        if (controller != null)
+        {
+            controller.BeginPlacement(option);
+        }
+    }
+
     public static bool ContainsGuiPoint(Vector2 guiPoint)
     {
         return CurrentRect.Contains(guiPoint);
     }
 
-    private void DrawRect(Rect rect, Color color)
+    private static Color Dim(Color color)
     {
-        Color previous = GUI.color;
-        GUI.color = color;
-        GUI.DrawTexture(rect, pixel);
-        GUI.color = previous;
-    }
-
-    private void DrawRectOutline(Rect rect, Color color, float thickness)
-    {
-        DrawRect(new Rect(rect.xMin, rect.yMin, rect.width, thickness), color);
-        DrawRect(new Rect(rect.xMin, rect.yMax - thickness, rect.width, thickness), color);
-        DrawRect(new Rect(rect.xMin, rect.yMin, thickness, rect.height), color);
-        DrawRect(new Rect(rect.xMax - thickness, rect.yMin, thickness, rect.height), color);
+        return new Color(color.r * 0.42f, color.g * 0.42f, color.b * 0.42f, color.a * 0.82f);
     }
 }

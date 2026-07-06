@@ -363,7 +363,8 @@ public void ClearSelection()
     {
         GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 10f, 170f, 20f), extractor.DisplayName, titleStyle);
         GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 36f, 180f, 18f), "Planet: " + extractor.PlanetName, bodyStyle);
-        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 56f, 180f, 18f), "Resource: " + extractor.Storage.ResourceType, bodyStyle);
+        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 56f, 76f, 18f), "Resource:", bodyStyle);
+        ResourceGui.DrawIconLabel(new Rect(panelRect.x + 88f, panelRect.y + 56f, 120f, 18f), extractor.Storage.ResourceType, bodyStyle, Color.white);
         GUI.Label(
             new Rect(panelRect.x + 12f, panelRect.y + 76f, 190f, 18f),
             "Stored: " + extractor.Storage.CurrentAmount + " / " + extractor.Storage.Capacity,
@@ -461,8 +462,8 @@ public void ClearSelection()
         );
 
         GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 102f, panelRect.width - 24f, 18f), "Recipe Pools", bodyStyle);
-        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 124f, panelRect.width - 24f, 18f), "Ore: " + factory.OrePool + " / " + SatelliteFactory.OreCost, bodyStyle);
-        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 142f, panelRect.width - 24f, 18f), "Silicate: " + factory.SilicatePool + " / " + SatelliteFactory.SilicateCost, bodyStyle);
+        ResourceGui.DrawIconAmount(new Rect(panelRect.x + 12f, panelRect.y + 124f, panelRect.width - 24f, 18f), ResourceType.Ore, factory.OrePool, bodyStyle, Color.white, " / " + SatelliteFactory.OreCost);
+        ResourceGui.DrawIconAmount(new Rect(panelRect.x + 12f, panelRect.y + 142f, panelRect.width - 24f, 18f), ResourceType.Silicate, factory.SilicatePool, bodyStyle, Color.white, " / " + SatelliteFactory.SilicateCost);
         DrawStorageContents(factory.Storage, panelRect.y + 168f);
     }
 
@@ -571,15 +572,11 @@ public void ClearSelection()
             return;
         }
 
-        for (int i = 0; i < stacks.Count; i++)
-        {
-            ResourceStack stack = stacks[i];
-            GUI.Label(
-                new Rect(panelRect.x + 12f, startY + 22f + (i * 18f), 190f, 18f),
-                stack.type + ": " + stack.amount,
-                bodyStyle
-            );
-        }
+        ResourceGui.DrawResourceStackList(
+            new Rect(panelRect.x + 12f, startY + 22f, panelRect.width - 24f, stacks.Count * 18f),
+            stacks,
+            bodyStyle,
+            18f);
     }
 
     private float PanelHeight()

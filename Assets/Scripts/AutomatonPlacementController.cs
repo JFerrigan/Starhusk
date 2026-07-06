@@ -237,6 +237,16 @@ public class AutomatonPlacementController : MonoBehaviour
         return BuildCostFor(ModeFor(option));
     }
 
+    public static Sprite SpriteFor(AutomatonBuildOption option)
+    {
+        return SpriteFor(ModeFor(option));
+    }
+
+    public static Color ColorFor(AutomatonBuildOption option)
+    {
+        return ColorFor(ModeFor(option));
+    }
+
     private void SpawnCurrent(Vector2 worldPosition)
     {
         if (!BuildResourcePool.Spend(BuildCostFor(placementMode)))

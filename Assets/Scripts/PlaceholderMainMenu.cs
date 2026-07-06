@@ -60,13 +60,17 @@ public class PlaceholderMainMenu : MonoBehaviour
         }
 
         PlaceholderMainMenu existingMenu = FindFirstObjectByType<PlaceholderMainMenu>();
-        if (existingMenu != null)
+        if (existingMenu == null)
         {
-            return;
+            GameObject menuObject = new GameObject("MainMenu");
+            menuObject.AddComponent<PlaceholderMainMenu>();
         }
 
-        GameObject menuObject = new GameObject("MainMenu");
-        menuObject.AddComponent<PlaceholderMainMenu>();
+        if (FindFirstObjectByType<SettingsMenuController>() == null)
+        {
+            GameObject settingsObject = new GameObject("SettingsMenuController");
+            settingsObject.AddComponent<SettingsMenuController>();
+        }
     }
 
     private void Awake()

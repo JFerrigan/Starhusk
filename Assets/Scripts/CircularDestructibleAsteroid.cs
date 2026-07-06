@@ -6,27 +6,34 @@ public class CircularDestructibleAsteroid : MonoBehaviour
     public int gridResolution = 34;
     public float localRadius = 0.5f;
     public float minimumLiveArea = 0.018f;
+    public float destroyedMapHideThreshold = 0.75f;
     public int maxLiveFragments = 5;
     public int meshSortingOrder = 10;
 
     private readonly HashSet<Vector2Int> cells = new HashSet<Vector2Int>();
     private ResourceDeposit deposit;
+    private MapMarker mapMarker;
     private PolygonCollider2D polygonCollider;
     private MeshFilter meshFilter;
     private MeshRenderer meshRenderer;
     private SpriteRenderer spriteRenderer;
     private Color tint = Color.white;
     private float cellSize;
+    private float initialArea;
     private float lastImpactFlashUntil;
 
     public float CurrentArea => cells.Count * cellSize * cellSize * LocalScaleArea();
     public int CellCount => cells.Count;
+    public float DestroyedFraction => initialArea <= 0f ? 0f : Mathf.Clamp01(1f - (CurrentArea / initialArea));
+    public bool ShouldAppearOnMapAndRadar => DestroyedFraction < Mathf.Clamp01(destroyedMapHideThreshold);
 
     private void Awake()
     {
         deposit = GetComponent<ResourceDeposit>();
+        mapMarker = GetComponent<MapMarker>();
         CacheSpriteRenderer();
         EnsureGeneratedShape();
+        EnsureInitialArea();
         RebuildGeometry();
         ApplyDiscoveryVisibility();
     }
@@ -48,11 +55,12 @@ public class CircularDestructibleAsteroid : MonoBehaviour
         }
     }
 
-    public void InitializeFromCells(IEnumerable<Vector2Int> sourceCells, float sourceCellSize, Color sourceTint, IReadOnlyList<ResourceStack> resources, int mineAmount)
+    public void InitializeFromCells(IEnumerable<Vector2Int> sourceCells, float sourceCellSize, Color sourceTint, IReadOnlyList<ResourceStack> resources, int mineAmount, float sourceInitialArea = 0f)
     {
         cells.Clear();
         cellSize = sourceCellSize;
         tint = sourceTint;
+        initialArea = sourceInitialArea;
 
         foreach (Vector2Int cell in sourceCells)
         {
@@ -60,6 +68,7 @@ public class CircularDestructibleAsteroid : MonoBehaviour
         }
 
         deposit = GetComponent<ResourceDeposit>();
+        mapMarker = GetComponent<MapMarker>();
         if (deposit == null)
         {
             deposit = gameObject.AddComponent<ResourceDeposit>();
@@ -67,6 +76,7 @@ public class CircularDestructibleAsteroid : MonoBehaviour
 
         deposit.ConfigureResourcesExact(resources, mineAmount);
         CacheSpriteRenderer();
+        EnsureInitialArea();
         RebuildGeometry();
         ApplyDiscoveryVisibility();
     }
@@ -138,6 +148,7 @@ public class CircularDestructibleAsteroid : MonoBehaviour
 
         if (liveComponents.Count <= 0)
         {
+            UpdateMapAndRadarVisibility();
             Destroy(gameObject);
             return true;
         }
@@ -225,7 +236,29 @@ public class CircularDestructibleAsteroid : MonoBehaviour
         mesh.RecalculateBounds();
 
         RebuildCollider();
+        UpdateMapAndRadarVisibility();
         ApplyDiscoveryVisibility();
+    }
+
+    private void EnsureInitialArea()
+    {
+        if (initialArea <= 0f)
+        {
+            initialArea = CurrentArea;
+        }
+    }
+
+    private void UpdateMapAndRadarVisibility()
+    {
+        if (mapMarker == null)
+        {
+            mapMarker = GetComponent<MapMarker>();
+        }
+
+        if (mapMarker != null)
+        {
+            mapMarker.hiddenFromMapAndRadar = !ShouldAppearOnMapAndRadar;
+        }
     }
 
     private void RebuildCollider()
@@ -506,8 +539,9 @@ public class CircularDestructibleAsteroid : MonoBehaviour
         chunk.gridResolution = gridResolution;
         chunk.localRadius = localRadius;
         chunk.minimumLiveArea = minimumLiveArea;
+        chunk.destroyedMapHideThreshold = destroyedMapHideThreshold;
         chunk.maxLiveFragments = maxLiveFragments;
-        chunk.InitializeFromCells(recenteredCells, cellSize, tint, resources, deposit == null ? 12 : deposit.mineAmountPerInteraction);
+        chunk.InitializeFromCells(recenteredCells, cellSize, tint, resources, deposit == null ? 12 : deposit.mineAmountPerInteraction, initialArea);
     }
 
     private void SpawnPickups(IReadOnlyList<ResourceStack> resources, Vector2 impactPoint, Vector2 shotDirection)
