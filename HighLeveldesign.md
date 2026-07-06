@@ -12,6 +12,32 @@
 
 
 
+- Phase 1 - Mining
+- mine asteroids, collect resources
+- upgrades for more asteroids or specific asteroid types. 
+- upgrade asteroid auto aim. add triple shot upgrade. add upgrade for penetrating rounds, and for 
+- movement upgrades: quick instant boost up to higher speed, faster acceleartion x5 (with way to switch modes), 
+ - Alternate mechanism for moving.
+-Quests
+
+- build engineering units, unlock automota (new power system? nuclear automata)
+- create storage & freighters etc
+- build infrastructure units, dyson sphere, unlock factories
+- 
+
+- Phase 2 - Resource automation
+- Unlock resource colelctors, high power comsunption
+- use more resources to get more satellites
+- Expand to new planets
+
+- Phase 3 - New star systems
+- Begin venturing into new star systems to create duson sphers
+- 
+
+- Phase 4 - intragalactic travel
+- Unlock full dyson sphere creation automation
+
+
 
 ## 1. Overview
 

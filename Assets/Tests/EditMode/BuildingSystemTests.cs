@@ -166,6 +166,69 @@ public class BuildingSystemTests
     }
 
     [Test]
+    public void UpgradeDefinitionsHaveExpectedCostsAndIds()
+    {
+        BuildingDefinition ping3 = BuildingCatalog.GetDefinition(BuildingType.Ping3Asteroids);
+        BuildingDefinition reveal = BuildingCatalog.GetDefinition(BuildingType.PingAsteroidResourceType);
+        BuildingDefinition ping10 = BuildingCatalog.GetDefinition(BuildingType.Ping10Asteroids);
+
+        Assert.That(ping3.displayName, Is.EqualTo("Ping 3 Asteroids"));
+        Assert.That(ping3.category, Is.EqualTo(BuildingCategory.Fabrication));
+        Assert.That(ping3.upgradeId, Is.EqualTo(UpgradeId.Ping3Asteroids));
+        AssertCost(ping3.buildCost, new ResourceStack(ResourceType.Ore, 75));
+
+        Assert.That(reveal.upgradeId, Is.EqualTo(UpgradeId.PingAsteroidResourceType));
+        AssertCost(reveal.buildCost, new ResourceStack(ResourceType.Ore, 100), new ResourceStack(ResourceType.Copper, 60));
+
+        Assert.That(ping10.upgradeId, Is.EqualTo(UpgradeId.Ping10Asteroids));
+        AssertCost(
+            ping10.buildCost,
+            new ResourceStack(ResourceType.Ore, 150),
+            new ResourceStack(ResourceType.Copper, 90),
+            new ResourceStack(ResourceType.Silicate, 75),
+            new ResourceStack(ResourceType.Ice, 50));
+    }
+
+    [Test]
+    public void UpgradeBuildingsCanPlaceOnAnyDiscoveredPlanetResource()
+    {
+        GameObject planet = CreatePlanet("Copper Planet", ResourceType.Copper, 300, true);
+
+        try
+        {
+            ResourceDeposit deposit = planet.GetComponent<ResourceDeposit>();
+
+            Assert.IsTrue(BuildingCatalog.IsValidPlacementTarget(BuildingType.Ping3Asteroids, deposit));
+            Assert.IsTrue(BuildingCatalog.CanPlaceOnDeposit(BuildingType.Ping3Asteroids, deposit));
+            Assert.IsFalse(BuildingCatalog.CanPlaceOnDeposit(BuildingType.Mine, deposit));
+        }
+        finally
+        {
+            Object.DestroyImmediate(planet);
+        }
+    }
+
+    [Test]
+    public void UpgradeStateStartsEmptyAndRejectsDuplicateUnlock()
+    {
+        GameObject player = new GameObject("Player");
+
+        try
+        {
+            PlayerUpgradeState state = player.AddComponent<PlayerUpgradeState>();
+
+            Assert.IsFalse(state.IsUnlocked(UpgradeId.Ping3Asteroids));
+            Assert.IsTrue(state.Unlock(UpgradeId.Ping3Asteroids));
+            Assert.IsTrue(state.IsUnlocked(UpgradeId.Ping3Asteroids));
+            Assert.IsFalse(state.Unlock(UpgradeId.Ping3Asteroids));
+        }
+        finally
+        {
+            Object.DestroyImmediate(player);
+        }
+    }
+
+    [Test]
     public void MoveKeepsStoredResourcesAndRejectsDifferentResourcePlanet()
     {
         GameObject orePlanet = CreatePlanet("Ore Planet", ResourceType.Ore, 300, true);
@@ -327,6 +390,16 @@ public class BuildingSystemTests
         }
 
         return buildingObject;
+    }
+
+    private static void AssertCost(ResourceStack[] actual, params ResourceStack[] expected)
+    {
+        Assert.That(actual.Length, Is.EqualTo(expected.Length));
+        for (int i = 0; i < expected.Length; i++)
+        {
+            Assert.That(actual[i].type, Is.EqualTo(expected[i].type));
+            Assert.That(actual[i].amount, Is.EqualTo(expected[i].amount));
+        }
     }
 }
 #endif

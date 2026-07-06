@@ -1,4 +1,5 @@
 #if UNITY_INCLUDE_TESTS
+using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -44,6 +45,32 @@ public class CircularDestructibleAsteroidTests
         Assert.IsTrue(cutApplied);
         Assert.That(TotalAsteroidResources() + TotalPickupResources(), Is.EqualTo(120));
         Assert.That(TotalPickupResources(), Is.GreaterThan(0));
+    }
+
+    [Test]
+    public void AsteroidHiddenFromMapAndRadarAtDefaultDestroyedThreshold()
+    {
+        GameObject asteroidObject = new GameObject("Mostly Destroyed Asteroid");
+        MapMarker marker = asteroidObject.AddComponent<MapMarker>();
+        marker.markerType = MapMarkerType.Asteroid;
+        ResourceDeposit deposit = asteroidObject.AddComponent<ResourceDeposit>();
+        deposit.ConfigureSingleResource(ResourceType.Ore, 100, 12);
+        CircularDestructibleAsteroid asteroid = asteroidObject.AddComponent<CircularDestructibleAsteroid>();
+
+        asteroid.InitializeFromCells(
+            new List<Vector2Int> { Vector2Int.zero },
+            1f,
+            Color.white,
+            new List<ResourceStack> { new ResourceStack(ResourceType.Ore, 25) },
+            12,
+            4f
+        );
+
+        Assert.That(asteroid.destroyedMapHideThreshold, Is.EqualTo(0.75f).Within(0.001f));
+        Assert.That(asteroid.DestroyedFraction, Is.EqualTo(0.75f).Within(0.001f));
+        Assert.IsFalse(asteroid.ShouldAppearOnMapAndRadar);
+        Assert.IsTrue(marker.hiddenFromMapAndRadar);
+        Assert.IsFalse(marker.IsVisible);
     }
 
     [Test]
