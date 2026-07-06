@@ -6,8 +6,9 @@ public class BuildOptionsMenu : MonoBehaviour
 {
     private const float WindowWidth = 620f;
     private const float WindowHeight = 520f;
-    private const float HeaderHeight = 32f;
-    private const float TabHeight = 28f;
+    private const float HeaderHeight = 48f;
+    private const float TabHeight = 42f;
+
 
     private static readonly string[] TabNames = { "All", "Harvest", "Automata", "Fabrication", "Power" };
 
@@ -28,23 +29,38 @@ public class BuildOptionsMenu : MonoBehaviour
     private void Awake()
     {
         pixel = Texture2D.whiteTexture;
+    }
+    private void EnsureStyles()
+    {
+        if (titleStyle != null &&
+            resourceStyle != null &&
+            tabStyle != null &&
+            itemStyle != null &&
+            costStyle != null)
+        {
+            return;
+        }
+
         titleStyle = new GUIStyle
         {
             fontSize = 18,
             fontStyle = FontStyle.Bold,
             normal = { textColor = Color.white }
         };
+
         resourceStyle = new GUIStyle
         {
             fontSize = 12,
             fontStyle = FontStyle.Bold,
             normal = { textColor = new Color(0.78f, 0.96f, 1f) }
         };
+
         tabStyle = new GUIStyle(GUI.skin.button)
         {
             fontSize = 12,
             fontStyle = FontStyle.Bold
         };
+
         itemStyle = new GUIStyle(GUI.skin.button)
         {
             alignment = TextAnchor.MiddleLeft,
@@ -52,6 +68,7 @@ public class BuildOptionsMenu : MonoBehaviour
             fontStyle = FontStyle.Bold,
             padding = new RectOffset(10, 8, 4, 4)
         };
+
         costStyle = new GUIStyle
         {
             fontSize = 11,
@@ -59,6 +76,7 @@ public class BuildOptionsMenu : MonoBehaviour
             alignment = TextAnchor.MiddleRight
         };
     }
+
 
     private void Update()
     {
@@ -70,9 +88,12 @@ public class BuildOptionsMenu : MonoBehaviour
 
     private void OnGUI()
     {
+        EnsureStyles();
+
         if (!isOpen)
         {
             CurrentRect = Rect.zero;
+            DrawOpenButton();
             return;
         }
 
@@ -83,26 +104,42 @@ public class BuildOptionsMenu : MonoBehaviour
         DrawRectOutline(windowRect, new Color(0.78f, 0.38f, 1f, 0.95f), 3f);
         DrawRect(new Rect(windowRect.x, windowRect.y, windowRect.width, HeaderHeight), new Color(0.16f, 0.05f, 0.28f, 0.98f));
 
-        GUI.Label(new Rect(windowRect.x + 14f, windowRect.y + 6f, 320f, 22f), "BUILD MENU [I]", titleStyle);
-        DrawResources(new Rect(windowRect.x + 14f, windowRect.y + 42f, windowRect.width - 28f, 22f));
-        DrawTabs(new Rect(windowRect.x + 14f, windowRect.y + 74f, windowRect.width - 28f, TabHeight));
-        DrawItems(new Rect(windowRect.x + 14f, windowRect.y + 112f, windowRect.width - 28f, windowRect.height - 126f));
+        GUI.Label(new Rect(windowRect.x + 24f, windowRect.y + 14f, 420f, 32f), "BUILD MENU [I]", titleStyle);
+        DrawResources(new Rect(windowRect.x + 24f, windowRect.y + 62f, windowRect.width - 48f, 30f));
+        DrawTabs(new Rect(windowRect.x + 24f, windowRect.y + 108f, windowRect.width - 48f, TabHeight));
+        DrawItems(new Rect(windowRect.x + 24f, windowRect.y + 164f, windowRect.width - 48f, windowRect.height - 188f));
     }
+    
+
+    private void DrawOpenButton()
+    {
+        Rect buttonRect = new Rect(16f, Screen.height - 58f, 190f, 42f);
+
+        DrawRect(buttonRect, new Color(0.09f, 0.03f, 0.16f, 0.94f));
+        DrawRectOutline(buttonRect, new Color(0.78f, 0.38f, 1f, 0.95f), 2f);
+
+        if (GUI.Button(buttonRect, "BUILD / UPGRADES [I]", tabStyle))
+        {
+            isOpen = true;
+        }
+    }
+
+
 
     private void EnsurePosition()
     {
-        if (initializedPosition)
-        {
-            return;
-        }
+        float margin = 48f;
 
         windowRect = new Rect(
-            Mathf.Max(12f, (Screen.width - WindowWidth) * 0.5f),
-            Mathf.Max(12f, (Screen.height - WindowHeight) * 0.5f),
-            Mathf.Min(WindowWidth, Screen.width - 24f),
-            Mathf.Min(WindowHeight, Screen.height - 24f));
+            margin,
+            margin,
+            Mathf.Max(160f, Screen.width - (margin * 2f)),
+            Mathf.Max(160f, Screen.height - (margin * 2f))
+        );
+
         initializedPosition = true;
     }
+
 
     private void DrawResources(Rect rect)
     {

@@ -47,7 +47,7 @@ public static class GameModeCatalog
                     startingResourceAmountPerType = 0,
                     spawnStartingCompanion = false,
                     requirePower = true,
-                    showRepository = false,
+                    showRepository = true,
                     starterAsteroidCount = 0,
                     useRandomSeed = true,
                     fixedSeed = DefaultDevSeed,
