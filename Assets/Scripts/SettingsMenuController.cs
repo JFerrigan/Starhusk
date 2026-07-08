@@ -5,6 +5,36 @@ public class SettingsMenuController : MonoBehaviour
 {
     private static readonly string[] TabNames = { "Controls", "Settings" };
     private static readonly int[] FrameRateOptions = { 30, 60, 120, 144, 240 };
+    private static readonly ControlBinding[] ControlBindings =
+    {
+        new ControlBinding("Rotate Left", "A / Left Arrow"),
+        new ControlBinding("Rotate Right", "D / Right Arrow"),
+        new ControlBinding("Forward Thrust", "W / Up Arrow"),
+        new ControlBinding("Reverse Thrust", "S / Down Arrow"),
+        new ControlBinding("Brake", "Space"),
+        new ControlBinding("Fire Mining Laser", "Left Mouse / Left Ctrl"),
+        new ControlBinding("Interact / Mine", "E"),
+        new ControlBinding("Radar Ping", "1"),
+        new ControlBinding("Scan", "F"),
+        new ControlBinding("Map", "M"),
+        new ControlBinding("Set Autopilot Destination", "Left-click full map"),
+        new ControlBinding("Build Menu", "I"),
+        new ControlBinding("Settings / Controls", "Esc / Gear"),
+        new ControlBinding("Toggle Routes", "T"),
+        new ControlBinding("Place Mine", "2"),
+        new ControlBinding("Place Condenser", "3"),
+        new ControlBinding("Place Harvester", "4"),
+        new ControlBinding("Place Dredger", "5"),
+        new ControlBinding("Place Collector", "6"),
+        new ControlBinding("Place Hub", "7"),
+        new ControlBinding("Place Freighter", "8"),
+        new ControlBinding("Place Storage", "9"),
+        new ControlBinding("Place Satellite Factory", "0"),
+        new ControlBinding("Confirm Placement / Select", "Left Mouse"),
+        new ControlBinding("Cancel Placement / Drag", "Right Mouse / Esc"),
+        new ControlBinding("Dialogue Continue", "Enter"),
+        new ControlBinding("Dialogue Choice", "1 - 4")
+    };
 
     private Rect windowRect;
     private bool isOpen;
@@ -13,10 +43,13 @@ public class SettingsMenuController : MonoBehaviour
     private GUIStyle tabStyle;
     private GUIStyle labelStyle;
     private GUIStyle bodyStyle;
+    private GUIStyle keyStyle;
     private GUIStyle buttonStyle;
     private GUIStyle smallButtonStyle;
+    private Vector2 controlsScrollPosition;
 
     public bool IsOpen => isOpen;
+    public static int ControlBindingCount => ControlBindings.Length;
 
     private void Update()
     {
@@ -105,22 +138,60 @@ public class SettingsMenuController : MonoBehaviour
 
     private void DrawControlsPage(Rect rect)
     {
-        GUI.Label(new Rect(rect.x, rect.y, rect.width, 30f), "Movement Control Type", labelStyle);
+        float controlsHeight = ControlBindingRowCount * 34f;
+        float movementY = 40f + controlsHeight + 28f;
+        float viewHeight = movementY + 260f;
+        Rect viewRect = new Rect(0f, 0f, rect.width - 18f, viewHeight);
+        controlsScrollPosition = GUI.BeginScrollView(rect, controlsScrollPosition, viewRect);
+
+        GUI.Label(new Rect(0f, 0f, viewRect.width, 30f), "Controls", labelStyle);
+        DrawControlBindings(new Rect(0f, 40f, viewRect.width, controlsHeight));
+
+        GUI.Label(new Rect(0f, movementY, viewRect.width, 30f), "Movement Control Type", labelStyle);
         GUI.Label(
-            new Rect(rect.x, rect.y + 34f, rect.width, 72f),
+            new Rect(0f, movementY + 34f, viewRect.width, 72f),
             "Newtonian Physics keeps free momentum. Simple Controls still accelerate without a speed cap, but keep movement aligned with the direction the ship is facing.",
             bodyStyle);
 
-        float y = rect.y + 122f;
+        float y = movementY + 122f;
         DrawMovementOption(
-            new Rect(rect.x, y, rect.width, 58f),
+            new Rect(0f, y, viewRect.width, 58f),
             MovementControlType.NewtonianPhysics,
             "Thrust adds momentum. Space brakes.");
 
         DrawMovementOption(
-            new Rect(rect.x, y + 68f, rect.width, 58f),
+            new Rect(0f, y + 68f, viewRect.width, 58f),
             MovementControlType.Simple,
             "Forward accelerates in the current facing direction. Releasing thrust slows to a stop.");
+
+        GUI.EndScrollView();
+    }
+
+    private void DrawControlBindings(Rect rect)
+    {
+        float columnGap = 12f;
+        float rowHeight = 34f;
+        float columnWidth = (rect.width - columnGap) * 0.5f;
+
+        for (int i = 0; i < ControlBindings.Length; i++)
+        {
+            int column = i % 2;
+            int row = i / 2;
+            Rect rowRect = new Rect(
+                rect.x + (column * (columnWidth + columnGap)),
+                rect.y + (row * rowHeight),
+                columnWidth,
+                rowHeight - 6f);
+
+            DrawControlBinding(rowRect, ControlBindings[i]);
+        }
+    }
+
+    private void DrawControlBinding(Rect rect, ControlBinding binding)
+    {
+        PixelUiSprites.Draw(rect, PixelUiFrame.Card);
+        GUI.Label(new Rect(rect.x + 10f, rect.y + 4f, rect.width * 0.52f, rect.height - 8f), binding.action, bodyStyle);
+        GUI.Label(new Rect(rect.x + rect.width * 0.58f, rect.y + 4f, rect.width * 0.38f, rect.height - 8f), binding.buttons, keyStyle);
     }
 
     private void DrawMovementOption(Rect rect, MovementControlType movementControl, string description)
@@ -246,6 +317,8 @@ public class SettingsMenuController : MonoBehaviour
         return FrameRateOptions[FrameRateOptions.Length - 1];
     }
 
+    private static int ControlBindingRowCount => Mathf.CeilToInt(ControlBindings.Length / 2f);
+
     private void EnsureStyles()
     {
         if (titleStyle != null)
@@ -285,6 +358,15 @@ public class SettingsMenuController : MonoBehaviour
             normal = { textColor = new Color(0.9f, 0.88f, 1f, 1f) }
         };
 
+        keyStyle = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = 13,
+            fontStyle = FontStyle.Bold,
+            wordWrap = true,
+            alignment = TextAnchor.MiddleRight,
+            normal = { textColor = PixelUiSprites.Gold }
+        };
+
         buttonStyle = new GUIStyle(GUI.skin.button)
         {
             fontSize = 17,
@@ -299,5 +381,17 @@ public class SettingsMenuController : MonoBehaviour
         {
             fontSize = 13
         };
+    }
+
+    private struct ControlBinding
+    {
+        public readonly string action;
+        public readonly string buttons;
+
+        public ControlBinding(string action, string buttons)
+        {
+            this.action = action;
+            this.buttons = buttons;
+        }
     }
 }

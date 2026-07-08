@@ -120,8 +120,18 @@ public class GameBootstrap : MonoBehaviour
             renderer = playerObject.AddComponent<SpriteRenderer>();
         }
 
-        renderer.sprite = LoadPlayerShipSprite();
+        Sprite thrustSprite = LoadPlayerShipSprite();
+        Sprite idleSprite = LoadSpriteResource("shipIdle");
+        renderer.sprite = idleSprite != null ? idleSprite : thrustSprite;
         renderer.color = Color.white;
+
+        PlayerShipVisual visual = renderer.GetComponent<PlayerShipVisual>();
+        if (visual == null)
+        {
+            visual = renderer.gameObject.AddComponent<PlayerShipVisual>();
+        }
+
+        visual.Configure(idleSprite, thrustSprite);
 
         BoxCollider2D box = playerObject.GetComponent<BoxCollider2D>();
         if (box == null)
@@ -145,6 +155,30 @@ public class GameBootstrap : MonoBehaviour
         rb.linearDamping = 0f;
         rb.angularDamping = Mathf.Max(rb.angularDamping, 2f);
 
+        ShipHealth health = playerObject.GetComponent<ShipHealth>();
+        if (health == null)
+        {
+            health = playerObject.AddComponent<ShipHealth>();
+        }
+
+        health.faction = ShipFaction.Player;
+        health.maxHealth = Mathf.Max(150f, health.maxHealth);
+        if (health.currentHealth <= 0f)
+        {
+            health.currentHealth = health.maxHealth;
+        }
+        health.destroyOnDeath = false;
+
+        if (playerObject.GetComponent<PlayerRespawnController>() == null)
+        {
+            playerObject.AddComponent<PlayerRespawnController>();
+        }
+
+        if (playerObject.GetComponent<ShipCrashDamage>() == null)
+        {
+            playerObject.AddComponent<ShipCrashDamage>();
+        }
+
         if (playerObject.GetComponent<Collider2D>() == null)
         {
             playerObject.AddComponent<BoxCollider2D>();
@@ -158,6 +192,11 @@ public class GameBootstrap : MonoBehaviour
         if (inventory.GetComponent<PlayerMovement>() == null)
         {
             inventory.gameObject.AddComponent<PlayerMovement>();
+        }
+
+        if (inventory.GetComponent<PlayerAutopilotController>() == null)
+        {
+            inventory.gameObject.AddComponent<PlayerAutopilotController>();
         }
 
         if (inventory.GetComponent<PlayerWeaponController>() == null)
@@ -445,7 +484,7 @@ public class GameBootstrap : MonoBehaviour
 
     private static Sprite LoadPlayerShipSprite()
     {
-        Sprite shipSprite = Resources.Load<Sprite>("ship");
+        Sprite shipSprite = LoadSpriteResource("ship");
 
         if (shipSprite != null)
         {
@@ -454,6 +493,27 @@ public class GameBootstrap : MonoBehaviour
 
         Debug.LogWarning("Could not find Assets/Resources/ship.png. Using placeholder ship sprite.");
         return PlaceholderSprites.Circle;
+    }
+
+    private static Sprite LoadSpriteResource(string resourceName)
+    {
+        Sprite sprite = Resources.Load<Sprite>(resourceName);
+        if (sprite != null)
+        {
+            return sprite;
+        }
+
+        Texture2D texture = Resources.Load<Texture2D>(resourceName);
+        if (texture == null)
+        {
+            return null;
+        }
+
+        return Sprite.Create(
+            texture,
+            new Rect(0f, 0f, texture.width, texture.height),
+            new Vector2(0.5f, 0.5f),
+            100f);
     }
 
     private static SpriteRenderer EnsurePlayerVisual(GameObject playerObject)
@@ -482,9 +542,19 @@ public class GameBootstrap : MonoBehaviour
             renderer = visualTransform.gameObject.AddComponent<SpriteRenderer>();
         }
 
-        renderer.sprite = LoadPlayerShipSprite();
+        Sprite thrustSprite = LoadPlayerShipSprite();
+        Sprite idleSprite = LoadSpriteResource("shipIdle");
+        renderer.sprite = idleSprite != null ? idleSprite : thrustSprite;
         renderer.color = Color.white;
         renderer.sortingOrder = 100;
+
+        PlayerShipVisual visual = renderer.GetComponent<PlayerShipVisual>();
+        if (visual == null)
+        {
+            visual = renderer.gameObject.AddComponent<PlayerShipVisual>();
+        }
+
+        visual.Configure(idleSprite, thrustSprite);
         return renderer;
     }
 }

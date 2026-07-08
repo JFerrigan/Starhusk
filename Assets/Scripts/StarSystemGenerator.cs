@@ -5,6 +5,9 @@ using UnityEngine.SceneManagement;
 
 public class StarSystemGenerator : MonoBehaviour
 {
+    public const int EnemyPlanetCount = 2;
+    public const int PiratesPerEnemyPlanet = 2;
+
     public int seed = 1107;
     public float systemRadius = 80f;
     public float worldScaleMultiplier = 10f;
@@ -117,16 +120,19 @@ public float starterAsteroidMaxDistance = 130f;    public int stationaryDysonSat
         totalResourceAmount += planetResources[resourceIndex].amount;
     }
 
+    bool hasPirateBase = IsEnemyPlanetIndex(i, planetCount);
+
     layout.planets.Add(new CelestialBodyDefinition
     {
-        name = ObjectNamer.PlanetNameFor(seed, i),
+        name = hasPirateBase ? ObjectNamer.PlanetNameFor(seed, i) + " Raider Base" : ObjectNamer.PlanetNameFor(seed, i),
         bodyType = bodyType,
         position = Direction(angle) * orbitRadius,
         radius = RandomRange(random, 1.8f, 3.5f),
         primaryResource = primaryResource,
         resourceAmount = totalResourceAmount,
         resources = planetResources,
-        discoveredAtStart = i == 0
+        discoveredAtStart = i == 0,
+        hasPirateBase = hasPirateBase
     });
 }
 
@@ -166,7 +172,10 @@ public float starterAsteroidMaxDistance = 130f;    public int stationaryDysonSat
         for (int i = 0; i < layout.planets.Count; i++)
         {
             CelestialBodyDefinition body = layout.planets[i];
-            GameObject planet = BuildSpriteObject(body.name, body.position, body.radius * celestialScaleMultiplier, PlanetColor(body.bodyType), body.discoveredAtStart, MapMarkerType.Planet, body.radius, false);
+            Color planetColor = body.hasPirateBase
+                ? Color.Lerp(PlanetColor(body.bodyType), new Color(1f, 0.1f, 0.08f, 1f), 0.45f)
+                : PlanetColor(body.bodyType);
+            GameObject planet = BuildSpriteObject(body.name, body.position, body.radius * celestialScaleMultiplier, planetColor, body.discoveredAtStart, MapMarkerType.Planet, body.radius, false);
             planet.AddComponent<PlanetLogisticsNetwork>();
             PlanetGravityWell gravityWell = planet.AddComponent<PlanetGravityWell>();
             gravityWell.surfaceRadius = body.radius * celestialScaleMultiplier * ColliderRadiusForMarker(MapMarkerType.Planet);
@@ -184,6 +193,11 @@ else
 }
 
 deposit.destroyWhenDepleted = false;
+
+            if (body.hasPirateBase)
+            {
+                SpawnPiratesAroundEnemyPlanet(body);
+            }
         }
 
         for (int i = 0; i < layout.asteroids.Count; i++)
@@ -193,6 +207,29 @@ deposit.destroyWhenDepleted = false;
         }
 
         BuildDysonSatellites(layout);
+    }
+
+    public static bool IsEnemyPlanetIndex(int planetIndex, int planetCount)
+    {
+        return planetIndex > 0 && planetIndex >= Mathf.Max(1, planetCount - EnemyPlanetCount);
+    }
+
+    public static Vector2 CalculatePirateSpawnPosition(CelestialBodyDefinition planet, float celestialScaleMultiplier, int pirateIndex)
+    {
+        float planetWorldRadius = planet.radius * celestialScaleMultiplier;
+        Vector2 baseDirection = planet.position.sqrMagnitude > 0.01f ? planet.position.normalized : Vector2.up;
+        Vector2 direction = Quaternion.Euler(0f, 0f, pirateIndex * 140f - 40f) * baseDirection;
+        return planet.position + direction.normalized * (planetWorldRadius + 24f);
+    }
+
+    private void SpawnPiratesAroundEnemyPlanet(CelestialBodyDefinition planet)
+    {
+        float leashRadius = Mathf.Max(120f, planet.radius * celestialScaleMultiplier + 95f);
+        for (int i = 0; i < PiratesPerEnemyPlanet; i++)
+        {
+            Vector2 spawnPosition = CalculatePirateSpawnPosition(planet, celestialScaleMultiplier, i);
+            PirateShipController.SpawnAnchoredAt(new Vector3(spawnPosition.x, spawnPosition.y, 0f), planet.position, generatedRoot, leashRadius);
+        }
     }
 
     private GameObject BuildSpriteObject(string objectName, Vector2 position, float visualRadius, Color color, bool discoveredAtStart, MapMarkerType markerType, float baseRadius, bool colliderIsTrigger = false)
@@ -730,7 +767,17 @@ private static bool IsStarterAsteroidPositionClear(
     return true;
 }
 
-    private void SpawnPlayerNearMainPlanet(StarSystemLayout layout)
+    public static Vector2 CalculateMainPlanetSpawn(CelestialBodyDefinition mainPlanet, float celestialScaleMultiplier)
+    {
+        float planetWorldRadius = mainPlanet.radius * celestialScaleMultiplier;
+        Vector2 directionAwayFromSun = mainPlanet.position.sqrMagnitude > 0.01f
+            ? mainPlanet.position.normalized
+            : Vector2.up;
+
+        return mainPlanet.position + directionAwayFromSun * (planetWorldRadius + 8f);
+    }
+
+    public void SpawnPlayerNearMainPlanet(StarSystemLayout layout)
 {
     if (layout == null || layout.planets == null || layout.planets.Count == 0)
     {
@@ -744,13 +791,7 @@ private static bool IsStarterAsteroidPositionClear(
     }
 
     CelestialBodyDefinition mainPlanet = layout.planets[0];
-
-    float planetWorldRadius = mainPlanet.radius * celestialScaleMultiplier;
-    Vector2 directionAwayFromSun = mainPlanet.position.sqrMagnitude > 0.01f
-        ? mainPlanet.position.normalized
-        : Vector2.up;
-
-    Vector2 spawnPosition = mainPlanet.position + directionAwayFromSun * (planetWorldRadius + 8f);
+    Vector2 spawnPosition = CalculateMainPlanetSpawn(mainPlanet, celestialScaleMultiplier);
 
     Rigidbody2D rb = player.GetComponent<Rigidbody2D>();
     if (rb != null)
@@ -760,5 +801,11 @@ private static bool IsStarterAsteroidPositionClear(
     }
 
     player.transform.position = new Vector3(spawnPosition.x, spawnPosition.y, player.transform.position.z);
+
+    PlayerRespawnController respawnController = player.GetComponent<PlayerRespawnController>();
+    if (respawnController != null)
+    {
+        respawnController.SetHomeSpawn(spawnPosition);
+    }
 }
 }

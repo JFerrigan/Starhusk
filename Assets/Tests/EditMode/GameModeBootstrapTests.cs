@@ -121,6 +121,35 @@ public class GameModeBootstrapTests
     }
 
     [Test]
+    public void SettingsControlsPageListsGameplayBindings()
+    {
+        Assert.That(SettingsMenuController.ControlBindingCount, Is.GreaterThanOrEqualTo(20));
+    }
+
+    [Test]
+    public void BootstrapAddsCrashDamageToPlayerShip()
+    {
+        RunBootstrap(GameModeCatalog.Create(GameModeId.Dev));
+
+        ResourceInventory player = Object.FindFirstObjectByType<ResourceInventory>();
+
+        Assert.IsNotNull(player);
+        Assert.IsNotNull(player.GetComponent<ShipHealth>());
+        Assert.IsNotNull(player.GetComponent<ShipCrashDamage>());
+    }
+
+    [Test]
+    public void BootstrapAddsAutopilotToPlayerShip()
+    {
+        RunBootstrap(GameModeCatalog.Create(GameModeId.Dev));
+
+        ResourceInventory player = Object.FindFirstObjectByType<ResourceInventory>();
+
+        Assert.IsNotNull(player);
+        Assert.IsNotNull(player.GetComponent<PlayerAutopilotController>());
+    }
+
+    [Test]
     public void BootstrapRunsOnlyForGameplayScenes()
     {
         Assert.IsFalse(GameBootstrap.ShouldBootstrapScene(GameModeCatalog.MainMenuSceneName));

@@ -3,7 +3,8 @@ using UnityEngine.SceneManagement;
 
 public class PlaceholderMainMenu : MonoBehaviour
 {
-    private const string BackgroundResourceName = "MenuBackground";
+    private const string BackgroundResourceName = "MainMenu";
+    private const string LegacyBackgroundResourceName = "MenuBackground";
     private const string FontResourceName = "MenuFont";
 
     public string gameTitle = "STARHUSK";
@@ -82,10 +83,16 @@ public class PlaceholderMainMenu : MonoBehaviour
         }
 
         pixel = Texture2D.whiteTexture;
-        backgroundImage = Resources.Load<Texture2D>(BackgroundResourceName);
+        backgroundImage = LoadBackgroundImage();
         menuFont = Resources.Load<Font>(FontResourceName);
 
         CreateNonSkinStyles();
+    }
+
+    private static Texture2D LoadBackgroundImage()
+    {
+        Texture2D background = Resources.Load<Texture2D>(BackgroundResourceName);
+        return background != null ? background : Resources.Load<Texture2D>(LegacyBackgroundResourceName);
     }
 
     private void OnGUI()

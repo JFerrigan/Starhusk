@@ -27,6 +27,139 @@ public class AutomatonSystemTests
     }
 
     [Test]
+    public void InventoryTransfersMixedResourcesToStorage()
+    {
+        GameObject playerObject = new GameObject("Player");
+        GameObject storageObject = new GameObject("Storage");
+
+        try
+        {
+            ResourceInventory inventory = playerObject.AddComponent<ResourceInventory>();
+            ResourceStorage storage = storageObject.AddComponent<ResourceStorage>();
+            storage.Configure(100);
+
+            inventory.AddResource(ResourceType.Ore, 7);
+            inventory.AddResource(ResourceType.Ice, 5);
+
+            int transferred = inventory.TransferAllTo(storage);
+
+            Assert.That(transferred, Is.EqualTo(12));
+            Assert.That(inventory.GetAmount(ResourceType.Ore), Is.EqualTo(0));
+            Assert.That(inventory.GetAmount(ResourceType.Ice), Is.EqualTo(0));
+            Assert.That(storage.GetAmount(ResourceType.Ore), Is.EqualTo(7));
+            Assert.That(storage.GetAmount(ResourceType.Ice), Is.EqualTo(5));
+        }
+        finally
+        {
+            Object.DestroyImmediate(playerObject);
+            Object.DestroyImmediate(storageObject);
+        }
+    }
+
+    [Test]
+    public void InventoryTransferLeavesOverflowWhenStorageCapacityIsLimited()
+    {
+        GameObject playerObject = new GameObject("Player");
+        GameObject storageObject = new GameObject("Storage");
+
+        try
+        {
+            ResourceInventory inventory = playerObject.AddComponent<ResourceInventory>();
+            ResourceStorage storage = storageObject.AddComponent<ResourceStorage>();
+            storage.Configure(10);
+
+            inventory.AddResource(ResourceType.Ore, 12);
+
+            int transferred = inventory.TransferAllTo(storage);
+
+            Assert.That(transferred, Is.EqualTo(10));
+            Assert.That(inventory.GetAmount(ResourceType.Ore), Is.EqualTo(2));
+            Assert.That(storage.GetAmount(ResourceType.Ore), Is.EqualTo(10));
+        }
+        finally
+        {
+            Object.DestroyImmediate(playerObject);
+            Object.DestroyImmediate(storageObject);
+        }
+    }
+
+    [Test]
+    public void InventoryTransferDoesNothingWhenStorageIsFull()
+    {
+        GameObject playerObject = new GameObject("Player");
+        GameObject storageObject = new GameObject("Storage");
+
+        try
+        {
+            ResourceInventory inventory = playerObject.AddComponent<ResourceInventory>();
+            ResourceStorage storage = storageObject.AddComponent<ResourceStorage>();
+            storage.Configure(10);
+            storage.AddResource(ResourceType.Copper, 10);
+            inventory.AddResource(ResourceType.Ore, 12);
+
+            int transferred = inventory.TransferAllTo(storage);
+
+            Assert.That(transferred, Is.EqualTo(0));
+            Assert.That(inventory.GetAmount(ResourceType.Ore), Is.EqualTo(12));
+            Assert.That(storage.GetAmount(ResourceType.Copper), Is.EqualTo(10));
+        }
+        finally
+        {
+            Object.DestroyImmediate(playerObject);
+            Object.DestroyImmediate(storageObject);
+        }
+    }
+
+    [Test]
+    public void InventoryTransferSyncsLegacyOreField()
+    {
+        GameObject playerObject = new GameObject("Player");
+        GameObject storageObject = new GameObject("Storage");
+
+        try
+        {
+            ResourceInventory inventory = playerObject.AddComponent<ResourceInventory>();
+            ResourceStorage storage = storageObject.AddComponent<ResourceStorage>();
+            storage.Configure(10);
+            inventory.AddResource(ResourceType.Ore, 7);
+
+            inventory.TransferAllTo(storage);
+
+            Assert.That(inventory.ore, Is.EqualTo(0));
+        }
+        finally
+        {
+            Object.DestroyImmediate(playerObject);
+            Object.DestroyImmediate(storageObject);
+        }
+    }
+
+    [Test]
+    public void StoreCargoButtonEligibilityExcludesAutomatonInternalCargo()
+    {
+        GameObject storageObject = new GameObject("Storage");
+        GameObject collectorObject = new GameObject("Collector");
+        GameObject freighterObject = new GameObject("Freighter");
+
+        try
+        {
+            ResourceStorage storage = storageObject.AddComponent<ResourceStorage>();
+            CollectorAutomaton collector = collectorObject.AddComponent<CollectorAutomaton>();
+            FreighterAutomaton freighter = freighterObject.AddComponent<FreighterAutomaton>();
+
+            Assert.IsTrue(BuildingSelectionController.CanStorePlayerCargo(storage, null, null));
+            Assert.IsFalse(BuildingSelectionController.CanStorePlayerCargo(storage, collector, null));
+            Assert.IsFalse(BuildingSelectionController.CanStorePlayerCargo(storage, null, freighter));
+        }
+        finally
+        {
+            Object.DestroyImmediate(storageObject);
+            Object.DestroyImmediate(collectorObject);
+            Object.DestroyImmediate(freighterObject);
+        }
+    }
+
+    [Test]
     public void BuildingStorageWithdrawsPartialResources()
     {
         GameObject buildingObject = new GameObject("Building");

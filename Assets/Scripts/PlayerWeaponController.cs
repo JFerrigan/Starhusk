@@ -55,7 +55,8 @@ public class PlayerWeaponController : MonoBehaviour
         projectile.speed = projectileSpeed;
         projectile.lifetime = projectileLifetime;
         projectile.cutRadius = projectileCutRadius;
-        projectile.Launch(forward, rb == null ? Vector2.zero : rb.linearVelocity);
+        projectile.faction = ShipFaction.Player;
+        projectile.Launch(forward, rb == null ? Vector2.zero : rb.linearVelocity, transform, ShipFaction.Player);
     }
 
     private static bool IsBuildPlacementActive()

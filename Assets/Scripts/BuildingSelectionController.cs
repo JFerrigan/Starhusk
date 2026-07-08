@@ -465,6 +465,7 @@ public void ClearSelection()
         ResourceGui.DrawIconAmount(new Rect(panelRect.x + 12f, panelRect.y + 124f, panelRect.width - 24f, 18f), ResourceType.Ore, factory.OrePool, bodyStyle, Color.white, " / " + SatelliteFactory.OreCost);
         ResourceGui.DrawIconAmount(new Rect(panelRect.x + 12f, panelRect.y + 142f, panelRect.width - 24f, 18f), ResourceType.Silicate, factory.SilicatePool, bodyStyle, Color.white, " / " + SatelliteFactory.SilicateCost);
         DrawStorageContents(factory.Storage, panelRect.y + 168f);
+        DrawStoreCargoButton(factory.Storage);
     }
 
     private void DrawPowerRelayPanel(PowerRelay relay)
@@ -549,6 +550,27 @@ public void ClearSelection()
     {
         GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 10f, 190f, 20f), title, titleStyle);
         DrawStorageContents(storage, contentY);
+        DrawStoreCargoButton(storage);
+    }
+
+    private void DrawStoreCargoButton(ResourceStorage storage)
+    {
+        if (!CanStorePlayerCargo(storage, selectedCollector, selectedFreighter))
+        {
+            return;
+        }
+
+        ResourceInventory inventory = FindFirstObjectByType<ResourceInventory>();
+        bool canStore = inventory != null && inventory.GetResources().Count > 0 && storage != null && !storage.IsFull;
+
+        bool previousGuiEnabled = GUI.enabled;
+        GUI.enabled = previousGuiEnabled && canStore;
+        if (GUI.Button(new Rect(panelRect.x + 12f, panelRect.y + panelRect.height - 36f, panelRect.width - 24f, 24f), "Store Cargo"))
+        {
+            inventory.TransferAllTo(storage);
+        }
+
+        GUI.enabled = previousGuiEnabled;
     }
 
     private void DrawStorageContents(ResourceStorage storage, float startY)
@@ -588,7 +610,7 @@ public void ClearSelection()
 
         if (selectedSatelliteFactory != null)
         {
-            return Mathf.Max(240f, 148f + (ResourceLineCount(selectedSatelliteFactory.Storage) * 18f));
+            return Mathf.Max(270f, 178f + (ResourceLineCount(selectedSatelliteFactory.Storage) * 18f));
         }
 
         if (selectedCollector != null)
@@ -603,12 +625,12 @@ public void ClearSelection()
 
         if (selectedHub != null)
         {
-            return Mathf.Max(BasePanelHeight, 78f + (ResourceLineCount(selectedHub.Storage) * 18f));
+            return Mathf.Max(BasePanelHeight + 30f, 108f + (ResourceLineCount(selectedHub.Storage) * 18f));
         }
 
         if (selectedStorage != null && selectedBuilding == null)
         {
-            return Mathf.Max(BasePanelHeight, 78f + (ResourceLineCount(selectedStorage) * 18f));
+            return Mathf.Max(BasePanelHeight + 30f, 108f + (ResourceLineCount(selectedStorage) * 18f));
         }
 
         return BasePanelHeight;
@@ -617,6 +639,11 @@ public void ClearSelection()
     private float PanelWidthForSelection()
     {
         return selectedFreighter == null ? PanelWidth : FreighterPanelWidth;
+    }
+
+    public static bool CanStorePlayerCargo(ResourceStorage storage, CollectorAutomaton selectedCollector, FreighterAutomaton selectedFreighter)
+    {
+        return storage != null && selectedCollector == null && selectedFreighter == null;
     }
 
     private static bool IsSelectableFreighterStorage(FreighterAutomaton freighter, ResourceStorage storage, bool isSource)

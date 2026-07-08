@@ -9,7 +9,8 @@ public enum MapMarkerType
     DysonSatellite,
     Collector,
     Hub,
-    PowerRelay
+    PowerRelay,
+    Pirate
 }
 
 public class MapMarker : MonoBehaviour

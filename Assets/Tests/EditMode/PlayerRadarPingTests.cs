@@ -1,5 +1,6 @@
 #if UNITY_INCLUDE_TESTS
 using NUnit.Framework;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class PlayerRadarPingTests
@@ -53,6 +54,119 @@ public class PlayerRadarPingTests
         Assert.That(right.y, Is.EqualTo(50f).Within(0.001f));
         Assert.That(up.x, Is.EqualTo(100f).Within(0.001f));
         Assert.That(up.y, Is.EqualTo(90f).Within(0.001f));
+    }
+
+    [Test]
+    public void HealthFractionClampsToValidRange()
+    {
+        Assert.That(FoundationHud.CalculateHealthFraction(75f, 150f), Is.EqualTo(0.5f).Within(0.001f));
+        Assert.That(FoundationHud.CalculateHealthFraction(200f, 150f), Is.EqualTo(1f).Within(0.001f));
+        Assert.That(FoundationHud.CalculateHealthFraction(-10f, 150f), Is.EqualTo(0f).Within(0.001f));
+        Assert.That(FoundationHud.CalculateHealthFraction(10f, 0f), Is.EqualTo(0f).Within(0.001f));
+    }
+
+    [Test]
+    public void CollisionWarningRequiresSpeedAtThreshold()
+    {
+        float threshold = FoundationHud.CollisionWarningSpeedThreshold(8f, 3f);
+
+        Assert.That(threshold, Is.EqualTo(24f).Within(0.001f));
+        Assert.IsFalse(FoundationHud.ShouldShowCollisionWarning(23.99f, threshold));
+        Assert.IsTrue(FoundationHud.ShouldShowCollisionWarning(24f, threshold));
+        Assert.IsTrue(FoundationHud.ShouldShowCollisionWarning(30f, threshold));
+    }
+
+    [Test]
+    public void CollisionWarningIgnoresTargetsBehindPlayer()
+    {
+        Assert.IsFalse(FoundationHud.IsTrajectoryThreat(Vector2.zero, Vector2.right * 12f, Vector2.left * 40f, 12f, 650f, 18f));
+    }
+
+    [Test]
+    public void CollisionWarningIgnoresTargetsOutsideDangerCorridor()
+    {
+        Assert.IsFalse(FoundationHud.IsTrajectoryThreat(Vector2.zero, Vector2.right * 12f, new Vector2(100f, 80f), 12f, 650f, 18f));
+    }
+
+    [Test]
+    public void CollisionWarningDetectsTargetsAheadInsideDangerCorridor()
+    {
+        Assert.IsTrue(FoundationHud.IsTrajectoryThreat(Vector2.zero, Vector2.right * 12f, new Vector2(100f, 20f), 12f, 650f, 18f));
+    }
+
+    [Test]
+    public void CollisionWarningIgnoresTargetsBeyondMaxDistance()
+    {
+        Assert.IsFalse(FoundationHud.IsTrajectoryThreat(Vector2.zero, Vector2.right * 12f, new Vector2(700f, 0f), 12f, 650f, 18f));
+    }
+
+    [Test]
+    public void CollisionWarningTargetsOnlyCelestialHazards()
+    {
+        Assert.IsTrue(FoundationHud.IsWarningTarget(MapMarkerType.Planet));
+        Assert.IsTrue(FoundationHud.IsWarningTarget(MapMarkerType.Star));
+        Assert.IsTrue(FoundationHud.IsWarningTarget(MapMarkerType.Asteroid));
+        Assert.IsFalse(FoundationHud.IsWarningTarget(MapMarkerType.Player));
+        Assert.IsFalse(FoundationHud.IsWarningTarget(MapMarkerType.Pirate));
+        Assert.IsFalse(FoundationHud.IsWarningTarget(MapMarkerType.Collector));
+        Assert.IsFalse(FoundationHud.IsWarningTarget(MapMarkerType.Hub));
+        Assert.IsFalse(FoundationHud.IsWarningTarget(MapMarkerType.PowerRelay));
+        Assert.IsFalse(FoundationHud.IsWarningTarget(MapMarkerType.DysonSatellite));
+    }
+
+    [Test]
+    public void CollisionWarningsSortByNearestForwardDistanceAndCap()
+    {
+        List<FoundationHud.CollisionWarningCandidate> warnings = new List<FoundationHud.CollisionWarningCandidate>
+        {
+            new FoundationHud.CollisionWarningCandidate(null, new Vector2(30f, 0f), 30f),
+            new FoundationHud.CollisionWarningCandidate(null, new Vector2(10f, 0f), 10f),
+            new FoundationHud.CollisionWarningCandidate(null, new Vector2(40f, 0f), 40f),
+            new FoundationHud.CollisionWarningCandidate(null, new Vector2(20f, 0f), 20f)
+        };
+
+        int count = FoundationHud.PrepareCollisionWarningsForRender(warnings, 3);
+
+        Assert.That(count, Is.EqualTo(3));
+        Assert.That(warnings[0].forwardDistance, Is.EqualTo(10f).Within(0.001f));
+        Assert.That(warnings[1].forwardDistance, Is.EqualTo(20f).Within(0.001f));
+        Assert.That(warnings[2].forwardDistance, Is.EqualTo(30f).Within(0.001f));
+    }
+
+    [Test]
+    public void CollisionWarningDistanceReportsDistanceUntilTargetEntersScreen()
+    {
+        float distance = FoundationHud.DistanceUntilOnScreen(Vector2.zero, new Vector2(130f, 40f), 10f, 100f, 50f);
+
+        Assert.That(distance, Is.EqualTo(20f).Within(0.001f));
+    }
+
+    [Test]
+    public void CollisionWarningScaleUsesMaxScaleAtZeroDistance()
+    {
+        Assert.That(FoundationHud.CollisionWarningScaleForDistance(0f, 650f, 0.75f, 1.55f), Is.EqualTo(1.55f).Within(0.001f));
+    }
+
+    [Test]
+    public void CollisionWarningScaleUsesMinScaleAtOrBeyondMaxDistance()
+    {
+        Assert.That(FoundationHud.CollisionWarningScaleForDistance(650f, 650f, 0.75f, 1.55f), Is.EqualTo(0.75f).Within(0.001f));
+        Assert.That(FoundationHud.CollisionWarningScaleForDistance(700f, 650f, 0.75f, 1.55f), Is.EqualTo(0.75f).Within(0.001f));
+    }
+
+    [Test]
+    public void CollisionWarningScaleInterpolatesAtMidDistance()
+    {
+        float scale = FoundationHud.CollisionWarningScaleForDistance(325f, 650f, 0.75f, 1.55f);
+
+        Assert.That(scale, Is.GreaterThan(0.75f));
+        Assert.That(scale, Is.LessThan(1.55f));
+    }
+
+    [Test]
+    public void CollisionWarningScaleClampsNegativeDistanceToMaxScale()
+    {
+        Assert.That(FoundationHud.CollisionWarningScaleForDistance(-10f, 650f, 0.75f, 1.55f), Is.EqualTo(1.55f).Within(0.001f));
     }
 
     [Test]
@@ -199,6 +313,28 @@ public class PlayerRadarPingTests
         {
             scene.Destroy();
             DestroyObjectsByName("Copper Rock");
+        }
+    }
+
+    [Test]
+    public void RadarIgnoresAsteroidsHiddenFromMapAndRadar()
+    {
+        RadarScene scene = CreateRadarScene();
+
+        try
+        {
+            GameObject hiddenAsteroid = CreateAsteroid("Hidden Rock", ResourceType.Ore, new Vector2(10f, 0f));
+            hiddenAsteroid.GetComponent<MapMarker>().hiddenFromMapAndRadar = true;
+
+            scene.Radar.Ping();
+
+            Assert.That(scene.Radar.ActiveContacts.Count, Is.EqualTo(0));
+            Assert.IsFalse(scene.Radar.TryGetPointer(MapMarkerType.Asteroid, out _));
+        }
+        finally
+        {
+            scene.Destroy();
+            DestroyObjectsByName("Hidden Rock");
         }
     }
 

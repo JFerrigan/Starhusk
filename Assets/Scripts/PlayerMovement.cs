@@ -9,10 +9,11 @@ public class PlayerMovement : MonoBehaviour
     public float reverseThrustMultiplier = 0.5f;
     public float brakeDeceleration = 28f;
     public float rotationResponsiveness = 12f;
-    public float simpleAcceleration = 80f;
-    public float simpleStopDeceleration = 80f;
+    public float simpleAcceleration = 8f;
+    public float simpleStopDeceleration = 28f;
 
     private Rigidbody2D rb;
+    private PlayerAutopilotController autopilot;
     private float rotateInput;
     private float thrustInput;
     private bool brakeInput;
@@ -20,10 +21,13 @@ public class PlayerMovement : MonoBehaviour
 
     public Vector2 Velocity => rb == null ? Vector2.zero : rb.linearVelocity;
     public float Speed => Velocity.magnitude;
+    public bool IsActivelyThrusting => !Mathf.Approximately(thrustInput, 0f);
+    public bool HasManualMovementInput => HasManualMovementInputValues(rotateInput, thrustInput, brakeInput);
 
     private void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
+        autopilot = GetComponent<PlayerAutopilotController>();
 
         if (rb != null)
         {
@@ -35,14 +39,14 @@ public class PlayerMovement : MonoBehaviour
 
     private void Update()
     {
+        rotateInput = 0f;
+        thrustInput = 0f;
+        brakeInput = false;
+
         if (Keyboard.current == null)
         {
             return;
         }
-
-        rotateInput = 0f;
-        thrustInput = 0f;
-        brakeInput = false;
 
         if (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed)
         {
@@ -68,6 +72,11 @@ public class PlayerMovement : MonoBehaviour
     private void FixedUpdate()
     {
         if (rb == null)
+        {
+            return;
+        }
+
+        if (AutopilotHasControl())
         {
             return;
         }
@@ -122,5 +131,22 @@ public class PlayerMovement : MonoBehaviour
 
         float signedSpeed = speed + (Mathf.Max(0f, acceleration) * Mathf.Clamp(thrustInput, -1f, 1f) * step);
         return normalizedForward * signedSpeed;
+    }
+
+    public static bool HasManualMovementInputValues(float rotateInput, float thrustInput, bool brakeInput)
+    {
+        return !Mathf.Approximately(rotateInput, 0f)
+            || !Mathf.Approximately(thrustInput, 0f)
+            || brakeInput;
+    }
+
+    private bool AutopilotHasControl()
+    {
+        if (autopilot == null)
+        {
+            autopilot = GetComponent<PlayerAutopilotController>();
+        }
+
+        return autopilot != null && autopilot.HasDestination;
     }
 }

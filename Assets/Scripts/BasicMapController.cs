@@ -11,11 +11,14 @@ public class BasicMapController : MonoBehaviour
     public Color fullMapBackground = new Color(0.01f, 0.02f, 0.04f, 0.94f);
     public Color boundaryColor = new Color(0.35f, 0.58f, 0.72f, 0.75f);
     public Color undiscoveredColor = new Color(0.45f, 0.48f, 0.52f, 0.35f);
+    public Color autopilotRouteColor = new Color(0.35f, 1f, 0.78f, 0.85f);
+    public Color autopilotDestinationColor = new Color(1f, 0.92f, 0.35f, 0.95f);
 
     private bool fullMapOpen;
     private StarSystemGenerator generator;
     private ResourceInventory playerInventory;
     private PlayerRadarPing radarPing;
+    private PlayerAutopilotController autopilot;
     private Texture2D pixel;
     private GUIStyle labelStyle;
 
@@ -51,6 +54,11 @@ public class BasicMapController : MonoBehaviour
         {
             radarPing = playerInventory.GetComponent<PlayerRadarPing>();
         }
+
+        if (autopilot == null && playerInventory != null)
+        {
+            autopilot = playerInventory.GetComponent<PlayerAutopilotController>();
+        }
     }
 
     private void OnGUI()
@@ -68,7 +76,8 @@ public class BasicMapController : MonoBehaviour
         );
 
         DrawMap(minimapRect, minimapBackground, false);
-        DrawMapButton(new Rect(minimapRect.x, minimapRect.yMax + 6f, minimapRect.width, 24f));
+        Rect mapButtonRect = new Rect(minimapRect.x, minimapRect.yMax + 6f, minimapRect.width, 24f);
+        DrawMapButton(mapButtonRect);
 
         if (fullMapOpen)
         {
@@ -80,6 +89,7 @@ public class BasicMapController : MonoBehaviour
             );
 
             DrawMap(fullMapRect, fullMapBackground, true);
+            HandleFullMapClick(fullMapRect, minimapRect, mapButtonRect);
         }
     }
 
@@ -98,6 +108,26 @@ public class BasicMapController : MonoBehaviour
             mapRect.center.x + (normalized.x * mapRect.width * 0.5f),
             mapRect.center.y - (normalized.y * mapRect.height * 0.5f)
         );
+    }
+
+    public static Vector2 MapToWorldPosition(Vector2 mapPosition, Rect mapRect, float systemRadius)
+    {
+        float radius = Mathf.Max(systemRadius, 1f);
+        float normalizedX = (mapPosition.x - mapRect.center.x) / (mapRect.width * 0.5f);
+        float normalizedY = (mapRect.center.y - mapPosition.y) / (mapRect.height * 0.5f);
+        return Vector2.ClampMagnitude(new Vector2(normalizedX, normalizedY), 1f) * radius;
+    }
+
+    public static bool TryGetAutopilotDestinationFromMapClick(Vector2 mousePosition, Rect mapRect, float systemRadius, out Vector2 destination)
+    {
+        destination = Vector2.zero;
+        if (!mapRect.Contains(mousePosition) || FullMapUiRect(mapRect).Contains(mousePosition))
+        {
+            return false;
+        }
+
+        destination = MapToWorldPosition(mousePosition, mapRect, systemRadius);
+        return true;
     }
 
     private void DrawMap(Rect rect, Color backgroundColor, bool includeLabels)
@@ -134,12 +164,76 @@ public class BasicMapController : MonoBehaviour
 
         if (includeLabels)
         {
+            DrawAutopilotRoute(rect);
+        }
+
+        if (includeLabels)
+        {
             GUI.Label(
-                new Rect(rect.x + 12f, rect.y + 10f, 260f, 42f),
-                "System Map  Seed " + generator.seed + "\nPress M to close",
+                FullMapUiRect(rect),
+                "System Map  Seed " + generator.seed + "\nPress M to close\nLeft-click destination. Manual controls cancel autopilot.",
                 labelStyle
             );
         }
+    }
+
+    private void HandleFullMapClick(Rect fullMapRect, Rect minimapRect, Rect mapButtonRect)
+    {
+        Event current = Event.current;
+        if (current == null || current.type != EventType.MouseDown || current.button != 0)
+        {
+            return;
+        }
+
+        if (minimapRect.Contains(current.mousePosition) || mapButtonRect.Contains(current.mousePosition))
+        {
+            return;
+        }
+
+        if (autopilot == null || generator == null)
+        {
+            return;
+        }
+
+        Vector2 destination;
+        if (!TryGetAutopilotDestinationFromMapClick(current.mousePosition, fullMapRect, generator.EffectiveSystemRadius, out destination))
+        {
+            return;
+        }
+
+        autopilot.SetDestination(destination);
+        current.Use();
+    }
+
+    private void DrawAutopilotRoute(Rect rect)
+    {
+        if (autopilot == null || !autopilot.HasDestination)
+        {
+            return;
+        }
+
+        IReadOnlyList<Vector2> route = autopilot.Waypoints;
+        if (route.Count >= 2)
+        {
+            Vector2 previous = WorldToMapPosition(route[0], rect, generator.EffectiveSystemRadius);
+            for (int i = 1; i < route.Count; i++)
+            {
+                Vector2 next = WorldToMapPosition(route[i], rect, generator.EffectiveSystemRadius);
+                DrawLine(previous, next, autopilotRouteColor, 2f);
+                DrawRect(new Rect(next.x - 3f, next.y - 3f, 6f, 6f), autopilotRouteColor);
+                previous = next;
+            }
+        }
+
+        Vector2 destination = WorldToMapPosition(autopilot.Destination, rect, generator.EffectiveSystemRadius);
+        DrawCircle(destination, 8f, autopilotDestinationColor, 24);
+        DrawLine(destination + new Vector2(-6f, 0f), destination + new Vector2(6f, 0f), autopilotDestinationColor, 2f);
+        DrawLine(destination + new Vector2(0f, -6f), destination + new Vector2(0f, 6f), autopilotDestinationColor, 2f);
+    }
+
+    private static Rect FullMapUiRect(Rect mapRect)
+    {
+        return new Rect(mapRect.x + 12f, mapRect.y + 10f, 380f, 64f);
     }
 
     private void DrawRadarOverlay(Rect rect, MapMarker playerMarker)
@@ -204,6 +298,8 @@ public class BasicMapController : MonoBehaviour
                 return new Color(1f, 0.76f, 0.22f, 0.95f);
             case MapMarkerType.Planet:
                 return new Color(0.28f, 0.95f, 1f, 0.95f);
+            case MapMarkerType.Pirate:
+                return new Color(1f, 0.24f, 0.16f, 0.95f);
             case MapMarkerType.Collector:
                 return new Color(0.45f, 0.95f, 1f, 0.95f);
             case MapMarkerType.Hub:
@@ -261,6 +357,8 @@ public class BasicMapController : MonoBehaviour
             case MapMarkerType.Star:
                 return 12f;
             case MapMarkerType.Planet:
+                return 7f;
+            case MapMarkerType.Pirate:
                 return 7f;
             case MapMarkerType.DysonSatellite:
                 return 5f;

@@ -97,6 +97,50 @@ public class ResourceInventory : MonoBehaviour
         return 0;
     }
 
+    public int TransferAllTo(ResourceStorage destination)
+    {
+        if (destination == null || destination.IsFull || resources.Count <= 0)
+        {
+            return 0;
+        }
+
+        int transferredTotal = 0;
+        for (int i = resources.Count - 1; i >= 0 && !destination.IsFull; i--)
+        {
+            ResourceStack stack = resources[i];
+            int acceptedAmount = destination.AddResource(stack.type, stack.amount);
+            if (acceptedAmount <= 0)
+            {
+                continue;
+            }
+
+            stack.amount -= acceptedAmount;
+            transferredTotal += acceptedAmount;
+
+            if (stack.amount <= 0)
+            {
+                resources.RemoveAt(i);
+            }
+            else
+            {
+                resources[i] = stack;
+            }
+        }
+
+        if (transferredTotal > 0)
+        {
+            SyncLegacyFields();
+        }
+
+        return transferredTotal;
+    }
+
+    public void ClearResources()
+    {
+        resources.Clear();
+        SyncLegacyFields();
+    }
+
     public IReadOnlyList<ResourceStack> GetResources()
     {
         return resources;

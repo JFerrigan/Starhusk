@@ -100,6 +100,118 @@ public class StarSystemGeneratorTests
     }
 
     [Test]
+    public void LayoutDedicatesTwoNonHomePlanetsToPirateBases()
+    {
+        StarSystemLayout layout = StarSystemGenerator.GenerateLayout(1107, 80f, 5, 5, 0, 0);
+        int pirateBaseCount = 0;
+
+        for (int i = 0; i < layout.planets.Count; i++)
+        {
+            if (layout.planets[i].hasPirateBase)
+            {
+                pirateBaseCount++;
+                Assert.That(i, Is.GreaterThan(0));
+            }
+        }
+
+        Assert.That(pirateBaseCount, Is.EqualTo(StarSystemGenerator.EnemyPlanetCount));
+        Assert.IsFalse(layout.planets[0].hasPirateBase);
+    }
+
+    [Test]
+    public void MainPlanetSpawnUsesPlanetRadiusAndDirectionAwayFromSun()
+    {
+        CelestialBodyDefinition mainPlanet = new CelestialBodyDefinition
+        {
+            position = new Vector2(30f, 40f),
+            radius = 2.5f
+        };
+
+        Vector2 spawn = StarSystemGenerator.CalculateMainPlanetSpawn(mainPlanet, 10f);
+        Vector2 expected = mainPlanet.position + mainPlanet.position.normalized * 33f;
+
+        Assert.That(Vector2.Distance(spawn, expected), Is.LessThan(0.001f));
+    }
+
+    [Test]
+    public void SpawnPlayerNearMainPlanetRegistersRespawnHome()
+    {
+        GameObject player = new GameObject("Player");
+        GameObject generatorObject = new GameObject("Generator");
+
+        try
+        {
+            player.AddComponent<Rigidbody2D>();
+            player.AddComponent<ShipHealth>().destroyOnDeath = false;
+            player.AddComponent<ResourceInventory>();
+            PlayerRespawnController respawn = player.AddComponent<PlayerRespawnController>();
+
+            StarSystemLayout layout = new StarSystemLayout();
+            layout.planets.Add(new CelestialBodyDefinition
+            {
+                position = new Vector2(12f, 16f),
+                radius = 3f
+            });
+
+            StarSystemGenerator generator = generatorObject.AddComponent<StarSystemGenerator>();
+            generator.celestialScaleMultiplier = 4f;
+
+            generator.SpawnPlayerNearMainPlanet(layout);
+
+            Vector2 expected = StarSystemGenerator.CalculateMainPlanetSpawn(layout.planets[0], generator.celestialScaleMultiplier);
+            Assert.IsTrue(respawn.HasHomeSpawn);
+            Assert.That(Vector2.Distance(respawn.HomeSpawn, expected), Is.LessThan(0.001f));
+            Assert.That(Vector2.Distance(player.transform.position, expected), Is.LessThan(0.001f));
+        }
+        finally
+        {
+            Object.DestroyImmediate(generatorObject);
+            Object.DestroyImmediate(player);
+        }
+    }
+
+    [Test]
+    public void GenerateWorldSpawnsAnchoredPiratesAtEnemyPlanets()
+    {
+        GameObject generatorObject = new GameObject("Generator");
+
+        try
+        {
+            StarSystemGenerator generator = generatorObject.AddComponent<StarSystemGenerator>();
+            generator.seed = 1107;
+            generator.minPlanets = 5;
+            generator.maxPlanets = 5;
+            generator.asteroidFieldCount = 0;
+            generator.asteroidsPerField = 0;
+            generator.starterAsteroidCount = 0;
+            generator.stationaryDysonSatelliteCount = 0;
+            generator.dynamicDysonSatelliteCount = 0;
+            generator.celestialScaleMultiplier = 4f;
+            generator.worldScaleMultiplier = 1f;
+
+            generator.GenerateWorld();
+
+            PirateShipController[] pirates = Object.FindObjectsByType<PirateShipController>(FindObjectsSortMode.None);
+            Assert.That(pirates.Length, Is.EqualTo(StarSystemGenerator.EnemyPlanetCount * StarSystemGenerator.PiratesPerEnemyPlanet));
+
+            for (int i = 0; i < pirates.Length; i++)
+            {
+                Assert.IsTrue(pirates[i].HasHomeAnchor);
+                Assert.That(Vector2.Distance(pirates[i].transform.position, pirates[i].HomeAnchor), Is.LessThan(pirates[i].leashRadius));
+            }
+        }
+        finally
+        {
+            Object.DestroyImmediate(generatorObject);
+            GameObject rootObject = GameObject.Find("GeneratedSystemRoot");
+            if (rootObject != null)
+            {
+                Object.DestroyImmediate(rootObject);
+            }
+        }
+    }
+
+    [Test]
     public void MineableAsteroidAddsInteractionTriggerWithoutReplacingSolidCollider()
     {
         GameObject asteroidObject = new GameObject("Asteroid");

@@ -33,6 +33,7 @@ public struct CelestialBodyDefinition
     public int resourceAmount;
     public List<ResourceStack> resources;
     public bool discoveredAtStart;
+    public bool hasPirateBase;
 }
 
 public struct DysonSatelliteDefinition
