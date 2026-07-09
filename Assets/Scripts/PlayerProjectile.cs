@@ -7,6 +7,10 @@ public class PlayerProjectile : MonoBehaviour
     public float cutRadius = 1.65f;
     public float damage = 25f;
     public ShipFaction faction = ShipFaction.Player;
+    public bool homingEnabled;
+    public float homingRange = 160f;
+    public float homingTurnSpeedDegrees = 260f;
+    public bool annihilateAsteroids;
 
     private Rigidbody2D rb;
     private Vector2 direction = Vector2.up;
@@ -37,6 +41,8 @@ public class PlayerProjectile : MonoBehaviour
 
     private void Update()
     {
+        UpdateHoming();
+
         if (Time.time >= expiresAt)
         {
             Destroy(gameObject);
@@ -92,10 +98,89 @@ public class PlayerProjectile : MonoBehaviour
             impactPoint = projectilePosition;
         }
 
-        if (asteroid.ApplyCircularCut(impactPoint, cutRadius, direction))
+        bool impacted = annihilateAsteroids
+            ? asteroid.DestroyEntireAsteroid(impactPoint, direction)
+            : asteroid.ApplyCircularCut(impactPoint, cutRadius, direction);
+
+        if (impacted)
         {
             DestroyProjectile(gameObject);
         }
+    }
+
+    private void UpdateHoming()
+    {
+        if (!homingEnabled || rb == null)
+        {
+            return;
+        }
+
+        Transform target = FindHomingTarget(transform.position, homingRange, faction, ownerRoot);
+        if (target == null)
+        {
+            return;
+        }
+
+        Vector2 toTarget = (Vector2)target.position - (Vector2)transform.position;
+        if (toTarget.sqrMagnitude <= 0.001f)
+        {
+            return;
+        }
+
+        Vector3 rotated = Vector3.RotateTowards(direction, toTarget.normalized, homingTurnSpeedDegrees * Mathf.Deg2Rad * Time.deltaTime, 0f);
+        direction = ((Vector2)rotated).normalized;
+        rb.linearVelocity = direction * speed;
+        transform.up = direction;
+    }
+
+    public static Transform FindHomingTarget(Vector2 position, float range, ShipFaction projectileFaction, Transform owner)
+    {
+        float rangeSquared = Mathf.Max(0f, range) * Mathf.Max(0f, range);
+        Transform nearestEnemy = null;
+        float nearestEnemyDistance = float.MaxValue;
+
+        ShipHealth[] ships = FindObjectsByType<ShipHealth>(FindObjectsSortMode.None);
+        for (int i = 0; i < ships.Length; i++)
+        {
+            ShipHealth ship = ships[i];
+            if (ship == null || ship.transform.root == owner || ship.faction == projectileFaction)
+            {
+                continue;
+            }
+
+            float distanceSquared = ((Vector2)ship.transform.position - position).sqrMagnitude;
+            if (distanceSquared <= rangeSquared && distanceSquared < nearestEnemyDistance)
+            {
+                nearestEnemyDistance = distanceSquared;
+                nearestEnemy = ship.transform;
+            }
+        }
+
+        if (nearestEnemy != null)
+        {
+            return nearestEnemy;
+        }
+
+        Transform nearestAsteroid = null;
+        float nearestAsteroidDistance = float.MaxValue;
+        MapMarker[] markers = FindObjectsByType<MapMarker>(FindObjectsSortMode.None);
+        for (int i = 0; i < markers.Length; i++)
+        {
+            MapMarker marker = markers[i];
+            if (marker == null || marker.markerType != MapMarkerType.Asteroid || !marker.CanAppearOnMapAndRadar)
+            {
+                continue;
+            }
+
+            float distanceSquared = ((Vector2)marker.transform.position - position).sqrMagnitude;
+            if (distanceSquared <= rangeSquared && distanceSquared < nearestAsteroidDistance)
+            {
+                nearestAsteroidDistance = distanceSquared;
+                nearestAsteroid = marker.transform;
+            }
+        }
+
+        return nearestAsteroid;
     }
 
     private void EnsureComponents()

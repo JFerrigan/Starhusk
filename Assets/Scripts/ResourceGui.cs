@@ -46,8 +46,15 @@ public static class ResourceGui
 
     public static void DrawIconAmount(Rect rect, ResourceType type, int amount, GUIStyle style, Color color, string suffix)
     {
-        Rect iconRect = new Rect(rect.x, rect.y + Mathf.Max(0f, (rect.height - 16f) * 0.5f), 16f, 16f);
-        Rect labelRect = new Rect(rect.x + 20f, rect.y, rect.width - 20f, rect.height);
+        DrawIconAmount(rect, type, amount, style, color, suffix, 16f);
+    }
+
+    public static void DrawIconAmount(Rect rect, ResourceType type, int amount, GUIStyle style, Color color, string suffix, float iconSize)
+    {
+        iconSize = Mathf.Max(1f, iconSize);
+        float gap = Mathf.Max(3f, iconSize * 0.25f);
+        Rect iconRect = new Rect(rect.x, rect.y + Mathf.Max(0f, (rect.height - iconSize) * 0.5f), iconSize, iconSize);
+        Rect labelRect = new Rect(rect.x + iconSize + gap, rect.y, rect.width - iconSize - gap, rect.height);
 
         Color previousColor = GUI.color;
         GUI.color = color;
@@ -62,8 +69,15 @@ public static class ResourceGui
 
     public static void DrawIconLabel(Rect rect, ResourceType type, GUIStyle style, Color color)
     {
-        Rect iconRect = new Rect(rect.x, rect.y + Mathf.Max(0f, (rect.height - 16f) * 0.5f), 16f, 16f);
-        Rect labelRect = new Rect(rect.x + 20f, rect.y, rect.width - 20f, rect.height);
+        DrawIconLabel(rect, type, style, color, 16f);
+    }
+
+    public static void DrawIconLabel(Rect rect, ResourceType type, GUIStyle style, Color color, float iconSize)
+    {
+        iconSize = Mathf.Max(1f, iconSize);
+        float gap = Mathf.Max(3f, iconSize * 0.25f);
+        Rect iconRect = new Rect(rect.x, rect.y + Mathf.Max(0f, (rect.height - iconSize) * 0.5f), iconSize, iconSize);
+        Rect labelRect = new Rect(rect.x + iconSize + gap, rect.y, rect.width - iconSize - gap, rect.height);
 
         Color previousColor = GUI.color;
         GUI.color = color;
@@ -83,10 +97,15 @@ public static class ResourceGui
 
     public static float DrawCostRow(Rect rect, ResourceStack[] cost, GUIStyle style, bool showMissing)
     {
+        return DrawCostRow(rect, cost, style, showMissing, 16f, 44f, 6f);
+    }
+
+    public static float DrawCostRow(Rect rect, ResourceStack[] cost, GUIStyle style, bool showMissing, float iconSize, float baseChipWidth, float chipSpacing)
+    {
         if (cost == null || cost.Length <= 0)
         {
             GUI.Label(rect, "FREE", style);
-            return 42f;
+            return Mathf.Max(baseChipWidth, rect.height);
         }
 
         float x = rect.x;
@@ -95,19 +114,21 @@ public static class ResourceGui
             ResourceStack stack = cost[i];
             int available = BuildResourcePool.GetAvailable(stack.type);
             bool missing = showMissing && available < stack.amount;
-            float width = Mathf.Clamp(44f + (stack.amount.ToString().Length * 7f), 52f, 82f);
+            float digitWidth = Mathf.Max(5f, style.fontSize * 0.52f);
+            float width = Mathf.Clamp(baseChipWidth + (stack.amount.ToString().Length * digitWidth), baseChipWidth + iconSize * 0.5f, baseChipWidth + iconSize * 2.4f);
             Rect chipRect = new Rect(x, rect.y, width, rect.height);
 
             PixelUiSprites.Draw(chipRect, PixelUiFrame.Chip);
             DrawIconAmount(
-                new Rect(chipRect.x + 4f, chipRect.y + 2f, chipRect.width - 8f, chipRect.height - 4f),
+                new Rect(chipRect.x + Mathf.Max(4f, iconSize * 0.25f), chipRect.y + 2f, chipRect.width - Mathf.Max(8f, iconSize * 0.5f), chipRect.height - 4f),
                 stack.type,
                 stack.amount,
                 style,
                 missing ? PixelUiSprites.Warning : Color.white,
-                null);
+                null,
+                iconSize);
 
-            x += width + 6f;
+            x += width + chipSpacing;
         }
 
         return x - rect.x;
@@ -115,30 +136,42 @@ public static class ResourceGui
 
     public static float DrawAvailableResources(Rect rect, GUIStyle style)
     {
+        return DrawAvailableResources(rect, style, 16f, 64f, 8f);
+    }
+
+    public static float DrawAvailableResources(Rect rect, GUIStyle style, float iconSize, float baseChipWidth, float chipSpacing)
+    {
         float x = rect.x;
         for (int i = 0; i < Types.Length; i++)
         {
             ResourceType type = Types[i];
             int amount = BuildResourcePool.GetAvailable(type);
-            float width = Mathf.Clamp(64f + (amount.ToString().Length * 7f), 74f, 108f);
+            float digitWidth = Mathf.Max(5f, style.fontSize * 0.52f);
+            float width = Mathf.Clamp(baseChipWidth + (amount.ToString().Length * digitWidth), baseChipWidth + iconSize * 0.6f, baseChipWidth + iconSize * 3.0f);
             Rect chipRect = new Rect(x, rect.y, width, rect.height);
 
             PixelUiSprites.Draw(chipRect, PixelUiFrame.Chip);
             DrawIconAmount(
-                new Rect(chipRect.x + 5f, chipRect.y + 3f, chipRect.width - 10f, chipRect.height - 6f),
+                new Rect(chipRect.x + Mathf.Max(5f, iconSize * 0.3f), chipRect.y + 3f, chipRect.width - Mathf.Max(10f, iconSize * 0.6f), chipRect.height - 6f),
                 type,
                 amount,
                 style,
                 Color.white,
-                null);
+                null,
+                iconSize);
 
-            x += width + 8f;
+            x += width + chipSpacing;
         }
 
         return x - rect.x;
     }
 
     public static void DrawResourceStackList(Rect rect, IReadOnlyList<ResourceStack> stacks, GUIStyle style, float rowHeight)
+    {
+        DrawResourceStackList(rect, stacks, style, rowHeight, 16f);
+    }
+
+    public static void DrawResourceStackList(Rect rect, IReadOnlyList<ResourceStack> stacks, GUIStyle style, float rowHeight, float iconSize)
     {
         if (stacks == null || stacks.Count <= 0)
         {
@@ -153,7 +186,10 @@ public static class ResourceGui
                 new Rect(rect.x, rect.y + (i * rowHeight), rect.width, rowHeight),
                 stack.type,
                 stack.amount,
-                style);
+                style,
+                Color.white,
+                null,
+                iconSize);
         }
     }
 

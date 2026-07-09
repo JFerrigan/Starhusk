@@ -163,6 +163,31 @@ public class CircularDestructibleAsteroid : MonoBehaviour
         return true;
     }
 
+    public bool DestroyEntireAsteroid(Vector2 impactPoint, Vector2 direction)
+    {
+        if (cells.Count <= 0)
+        {
+            return false;
+        }
+
+        SpawnPickups(CopyResources(deposit), impactPoint, direction);
+        cells.Clear();
+        UpdateMapAndRadarVisibility();
+
+        if (mapMarker == null)
+        {
+            mapMarker = GetComponent<MapMarker>();
+        }
+
+        if (mapMarker != null)
+        {
+            mapMarker.hiddenFromMapAndRadar = true;
+        }
+
+        DestroyAsteroidObject(gameObject);
+        return true;
+    }
+
     private void EnsureGeneratedShape()
     {
         gridResolution = Mathf.Clamp(gridResolution, 12, 80);
@@ -822,6 +847,18 @@ public class CircularDestructibleAsteroid : MonoBehaviour
         else
         {
             DestroyImmediate(component);
+        }
+    }
+
+    private static void DestroyAsteroidObject(GameObject asteroidObject)
+    {
+        if (Application.isPlaying)
+        {
+            Destroy(asteroidObject);
+        }
+        else
+        {
+            DestroyImmediate(asteroidObject);
         }
     }
 

@@ -27,6 +27,14 @@ public static class BuildingCatalog
         BuildingType.Ping3Asteroids,
         BuildingType.PingAsteroidResourceType,
         BuildingType.Ping10Asteroids,
+        BuildingType.TripleShotProjectiles,
+        BuildingType.HomingProjectiles,
+        BuildingType.AsteroidAnnihilator,
+        BuildingType.AutopilotUnlock,
+        BuildingType.ImpactShield,
+        BuildingType.AsteroidCarverHull,
+        BuildingType.InfiniteRadarRange,
+        BuildingType.PersistentRadarDiscovery,
         BuildingType.Condenser,
         BuildingType.Harvester,
         BuildingType.Dredger
@@ -124,6 +132,123 @@ public static class BuildingCatalog
                         new ResourceStack(ResourceType.Silicate, 75),
                         new ResourceStack(ResourceType.Ice, 50)),
                     upgradeId = UpgradeId.Ping10Asteroids
+                };
+            case BuildingType.TripleShotProjectiles:
+                return new BuildingDefinition
+                {
+                    displayName = "Triple Shot Projectiles",
+                    category = BuildingCategory.Fabrication,
+                    placeholderSprite = PlaceholderSprites.CollectorHub,
+                    tint = new Color(1f, 0.84f, 0.35f, 1f),
+                    visualScale = 5.5f,
+                    colliderRadius = 0.44f,
+                    buildCost = Cost(
+                        new ResourceStack(ResourceType.Ore, 125),
+                        new ResourceStack(ResourceType.Copper, 60)),
+                    upgradeId = UpgradeId.TripleShotProjectiles
+                };
+            case BuildingType.HomingProjectiles:
+                return new BuildingDefinition
+                {
+                    displayName = "Homing Projectiles",
+                    category = BuildingCategory.Fabrication,
+                    placeholderSprite = PlaceholderSprites.CollectorHub,
+                    tint = new Color(0.38f, 1f, 0.66f, 1f),
+                    visualScale = 5.5f,
+                    colliderRadius = 0.44f,
+                    buildCost = Cost(
+                        new ResourceStack(ResourceType.Ore, 175),
+                        new ResourceStack(ResourceType.Copper, 100),
+                        new ResourceStack(ResourceType.Silicate, 60)),
+                    upgradeId = UpgradeId.HomingProjectiles
+                };
+            case BuildingType.AsteroidAnnihilator:
+                return new BuildingDefinition
+                {
+                    displayName = "Asteroid Annihilator",
+                    category = BuildingCategory.Fabrication,
+                    placeholderSprite = PlaceholderSprites.CollectorHub,
+                    tint = new Color(1f, 0.42f, 0.3f, 1f),
+                    visualScale = 5.5f,
+                    colliderRadius = 0.44f,
+                    buildCost = Cost(
+                        new ResourceStack(ResourceType.Ore, 250),
+                        new ResourceStack(ResourceType.Copper, 140),
+                        new ResourceStack(ResourceType.Silicate, 120)),
+                    upgradeId = UpgradeId.AsteroidAnnihilator
+                };
+            case BuildingType.AutopilotUnlock:
+                return new BuildingDefinition
+                {
+                    displayName = "Autopilot Unlock",
+                    category = BuildingCategory.Power,
+                    placeholderSprite = PlaceholderSprites.SatelliteFactory,
+                    tint = new Color(0.48f, 0.72f, 1f, 1f),
+                    visualScale = 5.5f,
+                    colliderRadius = 0.44f,
+                    buildCost = Cost(
+                        new ResourceStack(ResourceType.Ore, 80),
+                        new ResourceStack(ResourceType.Copper, 40)),
+                    upgradeId = UpgradeId.AutopilotUnlock
+                };
+            case BuildingType.ImpactShield:
+                return new BuildingDefinition
+                {
+                    displayName = "Impact Shield",
+                    category = BuildingCategory.Power,
+                    placeholderSprite = PlaceholderSprites.DysonSatellite,
+                    tint = new Color(0.38f, 0.86f, 1f, 1f),
+                    visualScale = 5.5f,
+                    colliderRadius = 0.44f,
+                    buildCost = Cost(
+                        new ResourceStack(ResourceType.Ore, 120),
+                        new ResourceStack(ResourceType.Ice, 80)),
+                    upgradeId = UpgradeId.ImpactShield
+                };
+            case BuildingType.AsteroidCarverHull:
+                return new BuildingDefinition
+                {
+                    displayName = "Asteroid Carver Hull",
+                    category = BuildingCategory.Power,
+                    placeholderSprite = PlaceholderSprites.DysonSatellite,
+                    tint = new Color(0.9f, 0.72f, 0.42f, 1f),
+                    visualScale = 5.5f,
+                    colliderRadius = 0.44f,
+                    buildCost = Cost(
+                        new ResourceStack(ResourceType.Ore, 180),
+                        new ResourceStack(ResourceType.Silicate, 120),
+                        new ResourceStack(ResourceType.Copper, 80)),
+                    upgradeId = UpgradeId.AsteroidCarverHull
+                };
+            case BuildingType.InfiniteRadarRange:
+                return new BuildingDefinition
+                {
+                    displayName = "Infinite Radar Range",
+                    category = BuildingCategory.Fabrication,
+                    placeholderSprite = PlaceholderSprites.CollectorHub,
+                    tint = new Color(0.25f, 0.95f, 1f, 1f),
+                    visualScale = 5.5f,
+                    colliderRadius = 0.44f,
+                    buildCost = Cost(
+                        new ResourceStack(ResourceType.Ore, 200),
+                        new ResourceStack(ResourceType.Copper, 100),
+                        new ResourceStack(ResourceType.Ice, 100)),
+                    upgradeId = UpgradeId.InfiniteRadarRange
+                };
+            case BuildingType.PersistentRadarDiscovery:
+                return new BuildingDefinition
+                {
+                    displayName = "Persistent Radar Discovery",
+                    category = BuildingCategory.Fabrication,
+                    placeholderSprite = PlaceholderSprites.CollectorHub,
+                    tint = new Color(0.72f, 1f, 0.52f, 1f),
+                    visualScale = 5.5f,
+                    colliderRadius = 0.44f,
+                    buildCost = Cost(
+                        new ResourceStack(ResourceType.Ore, 220),
+                        new ResourceStack(ResourceType.Copper, 120),
+                        new ResourceStack(ResourceType.Biomass, 80)),
+                    upgradeId = UpgradeId.PersistentRadarDiscovery
                 };
             case BuildingType.Mine:
             default:

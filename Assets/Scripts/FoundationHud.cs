@@ -8,19 +8,20 @@ public class FoundationHud : MonoBehaviour
 
     private ResourceInventory inventory;
     private PlayerMovement playerMovement;
-    private PlayerScanner scanner;
     private PlayerRadarPing radarPing;
     private ShipHealth playerHealth;
     private ShipCrashDamage playerCrashDamage;
-    private StarSystemGenerator generator;
+    private PlayerUpgradeState playerUpgradeState;
     private Texture2D pixel;
     private GUIStyle labelStyle;
     private GUIStyle smallLabelStyle;
+    private float styleScale;
     private readonly List<CollisionWarningCandidate> collisionWarningCandidates = new List<CollisionWarningCandidate>();
 
     [Header("Collision Warnings")]
-    public float collisionWarningSpeedMultiplier = 3f;
+    public float collisionWarningSpeedMultiplier = 4.5f;
     public float collisionWarningMaxDistance = 650f;
+    public float collisionWarningDangerDistance = 160f;
     public float collisionWarningExtraCorridor = 18f;
     public float collisionWarningMinScale = 0.75f;
     public float collisionWarningMaxScale = 1.55f;
@@ -29,17 +30,6 @@ public class FoundationHud : MonoBehaviour
     private void Awake()
     {
         pixel = Texture2D.whiteTexture;
-        labelStyle = new GUIStyle
-        {
-            fontSize = 16,
-            normal = { textColor = Color.white }
-        };
-        smallLabelStyle = new GUIStyle
-        {
-            fontSize = 12,
-            normal = { textColor = Color.white },
-            alignment = TextAnchor.MiddleCenter
-        };
     }
 
     private void Update()
@@ -47,11 +37,6 @@ public class FoundationHud : MonoBehaviour
         if (inventory == null)
         {
             inventory = FindFirstObjectByType<ResourceInventory>();
-        }
-
-        if (scanner == null && inventory != null)
-        {
-            scanner = inventory.GetComponent<PlayerScanner>();
         }
 
         if (playerMovement == null && inventory != null)
@@ -74,10 +59,15 @@ public class FoundationHud : MonoBehaviour
             playerCrashDamage = inventory.GetComponent<ShipCrashDamage>();
         }
 
-        if (generator == null)
+        if (playerUpgradeState == null && inventory != null)
         {
-            generator = FindFirstObjectByType<StarSystemGenerator>();
+            playerUpgradeState = inventory.GetComponent<PlayerUpgradeState>();
+            if (playerUpgradeState == null)
+            {
+                playerUpgradeState = inventory.gameObject.AddComponent<PlayerUpgradeState>();
+            }
         }
+
     }
 
     private void OnGUI()
@@ -87,23 +77,38 @@ public class FoundationHud : MonoBehaviour
             return;
         }
 
-        string scannerState = scanner == null || scanner.IsReady ? "Ready" : "Charging";
-        int seed = generator == null ? 0 : generator.seed;
-        float speed = playerMovement == null ? 0f : playerMovement.Speed;
-        GUI.Label(
-            new Rect(12f, 12f, 560f, 44f),
-            "Seed " + seed +
-            "\nScanner " + scannerState +
-            "  Speed " + speed.ToString("0.0"),
-            labelStyle
-        );
+        EnsureStyles();
+        float scale = GameUiScale.Current;
 
-        DrawHudResources(new Rect(12f, 60f, 560f, 28f));
-        DrawRadarSlot(new Rect(12f, 104f, 64f, 64f));
-        DrawHealthBar(new Rect(84f, 104f, 220f, 28f));
-        DrawDevControls(new Rect(84f, 140f, 180f, 28f));
+        float resourceWidth = Mathf.Min(GameUiScale.Size(760f, scale), Screen.width - GameUiScale.Size(24f, scale));
+        float resourceHeight = GameUiScale.Size(32f, scale);
+        DrawHudResources(new Rect((Screen.width - resourceWidth) * 0.5f, Screen.height - resourceHeight - GameUiScale.Size(14f, scale), resourceWidth, resourceHeight), scale);
+        DrawHealthBar(new Rect(GameUiScale.Size(12f, scale), GameUiScale.Size(12f, scale), GameUiScale.Size(220f, scale), GameUiScale.Size(30f, scale)), scale);
+        DrawDevControls(new Rect(GameUiScale.Size(12f, scale), GameUiScale.Size(50f, scale), GameUiScale.Size(260f, scale), GameUiScale.Size(286f, scale)), scale);
         DrawRadarPointers();
         DrawCollisionWarnings();
+    }
+
+    private void EnsureStyles()
+    {
+        float scale = GameUiScale.Current;
+        if (labelStyle != null && Mathf.Approximately(styleScale, scale))
+        {
+            return;
+        }
+
+        styleScale = scale;
+        labelStyle = new GUIStyle
+        {
+            fontSize = GameUiScale.Font(16f, scale),
+            normal = { textColor = Color.white }
+        };
+        smallLabelStyle = new GUIStyle
+        {
+            fontSize = GameUiScale.Font(12f, scale),
+            normal = { textColor = Color.white },
+            alignment = TextAnchor.MiddleCenter
+        };
     }
 
     public static float CalculateHealthFraction(float currentHealth, float maxHealth)
@@ -179,13 +184,31 @@ public class FoundationHud : MonoBehaviour
         return Mathf.SmoothStep(maxScale, minScale, normalizedDistance);
     }
 
-    private void DrawHudResources(Rect rect)
+    public static Color CollisionWarningColorForDistance(float distanceUntilOnScreen, float dangerDistance)
     {
-        DrawRect(rect, new Color(0f, 0f, 0f, 0.58f));
-        ResourceGui.DrawAvailableResources(new Rect(rect.x + 6f, rect.y + 4f, rect.width - 12f, rect.height - 8f), smallLabelStyle);
+        Color caution = new Color(1f, 0.72f, 0.16f, 0.95f);
+        Color danger = new Color(1f, 0.08f, 0.04f, 0.95f);
+        if (dangerDistance <= 0f)
+        {
+            return distanceUntilOnScreen <= 0f ? danger : caution;
+        }
+
+        float dangerAmount = 1f - Mathf.Clamp01(Mathf.Max(0f, distanceUntilOnScreen) / dangerDistance);
+        return Color.Lerp(caution, danger, dangerAmount);
     }
 
-    private void DrawHealthBar(Rect rect)
+    private void DrawHudResources(Rect rect, float scale)
+    {
+        DrawRect(rect, new Color(0f, 0f, 0f, 0.58f));
+        ResourceGui.DrawAvailableResources(
+            new Rect(rect.x + GameUiScale.Size(6f, scale), rect.y + GameUiScale.Size(4f, scale), rect.width - GameUiScale.Size(12f, scale), rect.height - GameUiScale.Size(8f, scale)),
+            smallLabelStyle,
+            GameUiScale.Size(16f, scale),
+            GameUiScale.Size(64f, scale),
+            GameUiScale.Size(8f, scale));
+    }
+
+    private void DrawHealthBar(Rect rect, float scale)
     {
         if (playerHealth == null)
         {
@@ -196,8 +219,8 @@ public class FoundationHud : MonoBehaviour
         Color fillColor = Color.Lerp(new Color(0.95f, 0.18f, 0.12f, 0.95f), new Color(0.25f, 1f, 0.48f, 0.95f), healthFraction);
 
         DrawRect(rect, new Color(0f, 0f, 0f, 0.76f));
-        DrawRectOutline(rect, new Color(0.75f, 0.95f, 1f, 0.55f), 2f);
-        DrawRect(new Rect(rect.x + 4f, rect.y + 4f, (rect.width - 8f) * healthFraction, rect.height - 8f), fillColor);
+        DrawRectOutline(rect, new Color(0.75f, 0.95f, 1f, 0.55f), GameUiScale.Size(2f, scale));
+        DrawRect(new Rect(rect.x + GameUiScale.Size(4f, scale), rect.y + GameUiScale.Size(4f, scale), (rect.width - GameUiScale.Size(8f, scale)) * healthFraction, rect.height - GameUiScale.Size(8f, scale)), fillColor);
 
         GUI.Label(
             rect,
@@ -205,44 +228,72 @@ public class FoundationHud : MonoBehaviour
             smallLabelStyle);
     }
 
-    private void DrawDevControls(Rect rect)
+    private void DrawDevControls(Rect rect, float scale)
     {
-        if (!IsDevMode())
+        if (!IsDevMode() || playerUpgradeState == null)
         {
             return;
         }
 
         DrawRect(rect, new Color(0f, 0f, 0f, 0.72f));
-        DrawRectOutline(rect, new Color(1f, 0.4f, 0.24f, 0.8f), 2f);
-        GUI.Label(rect, "PIRATES: BASES", smallLabelStyle);
+        DrawRectOutline(rect, new Color(1f, 0.4f, 0.24f, 0.8f), GameUiScale.Size(2f, scale));
+        GUI.Label(new Rect(rect.x, rect.y + GameUiScale.Size(4f, scale), rect.width, GameUiScale.Size(18f, scale)), "DEV UPGRADES", smallLabelStyle);
+
+        IReadOnlyList<UpgradeId> upgradeIds = PlayerUpgradeState.AllUpgradeIds;
+        float rowHeight = GameUiScale.Size(22f, scale);
+        for (int i = 0; i < upgradeIds.Count; i++)
+        {
+            UpgradeId upgradeId = upgradeIds[i];
+            Rect rowRect = new Rect(
+                rect.x + GameUiScale.Size(8f, scale),
+                rect.y + GameUiScale.Size(28f, scale) + (rowHeight * i),
+                rect.width - GameUiScale.Size(16f, scale),
+                rowHeight);
+
+            bool unlocked = playerUpgradeState.IsUnlocked(upgradeId);
+            bool nextUnlocked = GUI.Toggle(rowRect, unlocked, UpgradeLabel(upgradeId), smallLabelStyle);
+            if (nextUnlocked != unlocked)
+            {
+                playerUpgradeState.SetUnlocked(upgradeId, nextUnlocked);
+            }
+        }
+    }
+
+    private static string UpgradeLabel(UpgradeId upgradeId)
+    {
+        switch (upgradeId)
+        {
+            case UpgradeId.Ping3Asteroids:
+                return "Ping 3 Asteroids";
+            case UpgradeId.PingAsteroidResourceType:
+                return "Ping Resource Type";
+            case UpgradeId.Ping10Asteroids:
+                return "Ping 10 Asteroids";
+            case UpgradeId.TripleShotProjectiles:
+                return "Triple Shot";
+            case UpgradeId.HomingProjectiles:
+                return "Homing Projectiles";
+            case UpgradeId.AsteroidAnnihilator:
+                return "Asteroid Annihilator";
+            case UpgradeId.AutopilotUnlock:
+                return "Autopilot";
+            case UpgradeId.ImpactShield:
+                return "Impact Shield";
+            case UpgradeId.AsteroidCarverHull:
+                return "Asteroid Carver Hull";
+            case UpgradeId.InfiniteRadarRange:
+                return "Infinite Radar";
+            case UpgradeId.PersistentRadarDiscovery:
+                return "Persistent Radar";
+            default:
+                return upgradeId.ToString();
+        }
     }
 
     private static bool IsDevMode()
     {
         GameModeRules rules = GameModeRuntime.ResolveActiveRules(SceneManager.GetActiveScene().name);
         return rules != null && rules.modeId == GameModeId.Dev;
-    }
-
-    private void DrawRadarSlot(Rect rect)
-    {
-        bool ready = radarPing == null || radarPing.IsReady;
-        Color frameColor = ready ? new Color(0.2f, 0.95f, 1f, 0.95f) : new Color(0.18f, 0.36f, 0.42f, 0.95f);
-        Color fillColor = ready ? new Color(0.04f, 0.24f, 0.3f, 0.92f) : new Color(0.03f, 0.08f, 0.1f, 0.92f);
-
-        DrawRect(rect, new Color(0f, 0f, 0f, 0.76f));
-        DrawRectOutline(rect, frameColor, 3f);
-        DrawRect(new Rect(rect.x + 6f, rect.y + 6f, rect.width - 12f, rect.height - 12f), fillColor);
-
-        if (radarPing != null && !ready)
-        {
-            float cooldownProgress = 1f - Mathf.Clamp01(radarPing.CooldownRemaining / Mathf.Max(0.01f, radarPing.cooldownSeconds));
-            Rect fillRect = new Rect(rect.x + 6f, rect.yMax - 6f - ((rect.height - 12f) * cooldownProgress), rect.width - 12f, (rect.height - 12f) * cooldownProgress);
-            DrawRect(fillRect, new Color(0.12f, 0.7f, 0.85f, 0.55f));
-        }
-
-        GUI.Label(new Rect(rect.x + 6f, rect.y + 4f, 18f, 18f), "1", smallLabelStyle);
-        GUI.Label(new Rect(rect.x + 6f, rect.y + 23f, rect.width - 12f, 18f), "RAD", smallLabelStyle);
-        GUI.Label(new Rect(rect.x + 6f, rect.y + 41f, rect.width - 12f, 18f), ready ? "RDY" : radarPing.CooldownRemaining.ToString("0.0"), smallLabelStyle);
     }
 
     private void DrawRadarPointers()
@@ -272,14 +323,14 @@ public class FoundationHud : MonoBehaviour
         for (int i = 0; i < asteroidPositions.Count; i++)
         {
             DrawEdgePointer("ROCK", asteroidPositions[i], new Color(0.95f, 0.78f, 0.42f, 0.95f), separation);
-            separation += 24f;
+            separation += GameUiScale.Size(24f);
         }
     }
 
     if (hasPlanet)
     {
         DrawEdgePointer("PLANET", planetPosition, new Color(0.28f, 0.95f, 1f, 0.95f), separation);
-        separation += 24f;
+        separation += GameUiScale.Size(24f);
     }
 
     if (hasStar)
@@ -322,7 +373,7 @@ private void DrawCollisionWarnings()
         }
 
         Vector2 markerPosition = marker.transform.position;
-        if (TryWorldToGuiPosition(markerPosition, out Vector2 guiPosition) && IsGuiPointOnScreen(guiPosition, 18f))
+        if (TryWorldToGuiPosition(markerPosition, out Vector2 guiPosition) && IsGuiPointOnScreen(guiPosition, GameUiScale.Size(18f)))
         {
             continue;
         }
@@ -344,8 +395,7 @@ private void DrawCollisionWarnings()
     }
 
     int warningCount = PrepareCollisionWarningsForRender(collisionWarningCandidates, maxCollisionWarnings);
-    float separation = 72f;
-    Color warningColor = new Color(1f, 0.08f, 0.04f, 0.95f);
+    float separation = GameUiScale.Size(72f);
 
     for (int i = 0; i < warningCount; i++)
     {
@@ -355,8 +405,9 @@ private void DrawCollisionWarnings()
             collisionWarningMaxDistance,
             collisionWarningMinScale,
             collisionWarningMaxScale);
+        Color warningColor = CollisionWarningColorForDistance(warning.distanceUntilOnScreen, collisionWarningDangerDistance);
         DrawEdgeWarningPointer(warning.worldPosition, warningColor, separation, scale);
-        separation += 24f * Mathf.Max(0.75f, scale);
+        separation += GameUiScale.Size(24f) * Mathf.Max(0.75f, scale);
     }
 }
 
@@ -408,7 +459,7 @@ private static float ApproximateCollisionRadius(MapMarker marker)
 
     if (TryWorldToGuiPosition(targetPosition, out targetGuiPosition))
     {
-        if (IsGuiPointOnScreen(targetGuiPosition, 18f))
+        if (IsGuiPointOnScreen(targetGuiPosition, GameUiScale.Size(18f)))
         {
             DrawOnScreenPointer(label, detail, targetGuiPosition, color);
             return;
@@ -430,18 +481,19 @@ private static float ApproximateCollisionRadius(MapMarker marker)
 
     direction.Normalize();
 
-    Vector2 center = EdgePointerPosition(direction, Screen.width, Screen.height, 34f + separation);
-    Vector2 tip = center + (direction * 20f);
-    Vector2 left = tip - (direction * 8f) + new Vector2(-direction.y, direction.x) * 5f;
-    Vector2 right = tip - (direction * 8f) - new Vector2(-direction.y, direction.x) * 5f;
-    Rect labelRect = new Rect(center.x - 34f, center.y + 13f, 68f, string.IsNullOrEmpty(detail) ? 18f : 32f);
+    float uiScale = GameUiScale.Current;
+    Vector2 center = EdgePointerPosition(direction, Screen.width, Screen.height, GameUiScale.Size(34f, uiScale) + separation);
+    Vector2 tip = center + (direction * GameUiScale.Size(20f, uiScale));
+    Vector2 left = tip - (direction * GameUiScale.Size(8f, uiScale)) + new Vector2(-direction.y, direction.x) * GameUiScale.Size(5f, uiScale);
+    Vector2 right = tip - (direction * GameUiScale.Size(8f, uiScale)) - new Vector2(-direction.y, direction.x) * GameUiScale.Size(5f, uiScale);
+    Rect labelRect = new Rect(center.x - GameUiScale.Size(34f, uiScale), center.y + GameUiScale.Size(13f, uiScale), GameUiScale.Size(68f, uiScale), string.IsNullOrEmpty(detail) ? GameUiScale.Size(18f, uiScale) : GameUiScale.Size(32f, uiScale));
 
-    Rect frameRect = new Rect(center.x - 28f, center.y - 18f, 56f, string.IsNullOrEmpty(detail) ? 52f : 66f);
+    Rect frameRect = new Rect(center.x - GameUiScale.Size(28f, uiScale), center.y - GameUiScale.Size(18f, uiScale), GameUiScale.Size(56f, uiScale), string.IsNullOrEmpty(detail) ? GameUiScale.Size(52f, uiScale) : GameUiScale.Size(66f, uiScale));
     DrawRect(frameRect, new Color(0f, 0f, 0f, 0.52f));
-    DrawRectOutline(frameRect, color, 2f);
-    DrawLine(center - (direction * 10f), tip, color, 4f);
-    DrawLine(tip, left, color, 4f);
-    DrawLine(tip, right, color, 4f);
+    DrawRectOutline(frameRect, color, GameUiScale.Size(2f, uiScale));
+    DrawLine(center - (direction * GameUiScale.Size(10f, uiScale)), tip, color, GameUiScale.Size(4f, uiScale));
+    DrawLine(tip, left, color, GameUiScale.Size(4f, uiScale));
+    DrawLine(tip, right, color, GameUiScale.Size(4f, uiScale));
     GUI.Label(labelRect, string.IsNullOrEmpty(detail) ? label : label + "\n" + detail, smallLabelStyle);
 }
 
@@ -467,9 +519,10 @@ private void DrawEdgeWarningPointer(Vector2 targetPosition, Color color, float s
     }
 
     direction.Normalize();
-    scale = Mathf.Max(0.01f, scale);
+    float uiScale = GameUiScale.Current;
+    scale = Mathf.Max(0.01f, scale) * uiScale;
 
-    Vector2 center = EdgePointerPosition(direction, Screen.width, Screen.height, 34f + separation);
+    Vector2 center = EdgePointerPosition(direction, Screen.width, Screen.height, GameUiScale.Size(34f, uiScale) + separation);
     Vector2 tip = center + (direction * 20f * scale);
     Vector2 wingBase = tip - (direction * 8f * scale);
     Vector2 perpendicular = new Vector2(-direction.y, direction.x);
@@ -520,17 +573,18 @@ private void DrawOnScreenPointer(string label, Vector2 center, Color color)
 
 private void DrawOnScreenPointer(string label, string detail, Vector2 center, Color color)
 {
-    float size = 28f;
+    float uiScale = GameUiScale.Current;
+    float size = GameUiScale.Size(28f, uiScale);
     Rect frameRect = new Rect(center.x - (size * 0.5f), center.y - (size * 0.5f), size, size);
-    Rect labelRect = new Rect(center.x - 34f, center.y - 48f, 68f, string.IsNullOrEmpty(detail) ? 18f : 32f);
+    Rect labelRect = new Rect(center.x - GameUiScale.Size(34f, uiScale), center.y - GameUiScale.Size(48f, uiScale), GameUiScale.Size(68f, uiScale), string.IsNullOrEmpty(detail) ? GameUiScale.Size(18f, uiScale) : GameUiScale.Size(32f, uiScale));
 
-    DrawRect(new Rect(center.x - 20f, center.y - 20f, 40f, 40f), new Color(0f, 0f, 0f, 0.38f));
-    DrawRectOutline(frameRect, color, 2f);
+    DrawRect(new Rect(center.x - GameUiScale.Size(20f, uiScale), center.y - GameUiScale.Size(20f, uiScale), GameUiScale.Size(40f, uiScale), GameUiScale.Size(40f, uiScale)), new Color(0f, 0f, 0f, 0.38f));
+    DrawRectOutline(frameRect, color, GameUiScale.Size(2f, uiScale));
 
-    DrawLine(new Vector2(center.x - 16f, center.y), new Vector2(center.x - 6f, center.y), color, 3f);
-    DrawLine(new Vector2(center.x + 6f, center.y), new Vector2(center.x + 16f, center.y), color, 3f);
-    DrawLine(new Vector2(center.x, center.y - 16f), new Vector2(center.x, center.y - 6f), color, 3f);
-    DrawLine(new Vector2(center.x, center.y + 6f), new Vector2(center.x, center.y + 16f), color, 3f);
+    DrawLine(new Vector2(center.x - GameUiScale.Size(16f, uiScale), center.y), new Vector2(center.x - GameUiScale.Size(6f, uiScale), center.y), color, GameUiScale.Size(3f, uiScale));
+    DrawLine(new Vector2(center.x + GameUiScale.Size(6f, uiScale), center.y), new Vector2(center.x + GameUiScale.Size(16f, uiScale), center.y), color, GameUiScale.Size(3f, uiScale));
+    DrawLine(new Vector2(center.x, center.y - GameUiScale.Size(16f, uiScale)), new Vector2(center.x, center.y - GameUiScale.Size(6f, uiScale)), color, GameUiScale.Size(3f, uiScale));
+    DrawLine(new Vector2(center.x, center.y + GameUiScale.Size(6f, uiScale)), new Vector2(center.x, center.y + GameUiScale.Size(16f, uiScale)), color, GameUiScale.Size(3f, uiScale));
 
     GUI.Label(labelRect, string.IsNullOrEmpty(detail) ? label : label + "\n" + detail, smallLabelStyle);
 }

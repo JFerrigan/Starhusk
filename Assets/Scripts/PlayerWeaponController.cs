@@ -8,6 +8,7 @@ public class PlayerWeaponController : MonoBehaviour
     public float projectileSpeed = 58f;
     public float projectileLifetime = 2.4f;
     public float projectileCutRadius = 1.65f;
+    public float tripleShotSpreadDegrees = 12f;
 
     private Rigidbody2D rb;
     private float nextFireTime;
@@ -46,6 +47,22 @@ public class PlayerWeaponController : MonoBehaviour
     private void Fire()
     {
         Vector2 forward = transform.up;
+        bool tripleShot = IsUpgradeUnlocked(UpgradeId.TripleShotProjectiles);
+
+        if (tripleShot)
+        {
+            SpawnProjectile(Quaternion.Euler(0f, 0f, -tripleShotSpreadDegrees) * forward);
+            SpawnProjectile(forward);
+            SpawnProjectile(Quaternion.Euler(0f, 0f, tripleShotSpreadDegrees) * forward);
+            return;
+        }
+
+        SpawnProjectile(forward);
+    }
+
+    private void SpawnProjectile(Vector2 forward)
+    {
+        forward = forward.sqrMagnitude > 0.001f ? forward.normalized : (Vector2)transform.up;
         Vector2 spawnPosition = (Vector2)transform.position + (forward * muzzleOffset);
 
         GameObject projectileObject = new GameObject("Mining Projectile");
@@ -56,7 +73,15 @@ public class PlayerWeaponController : MonoBehaviour
         projectile.lifetime = projectileLifetime;
         projectile.cutRadius = projectileCutRadius;
         projectile.faction = ShipFaction.Player;
+        projectile.homingEnabled = IsUpgradeUnlocked(UpgradeId.HomingProjectiles);
+        projectile.annihilateAsteroids = IsUpgradeUnlocked(UpgradeId.AsteroidAnnihilator);
         projectile.Launch(forward, rb == null ? Vector2.zero : rb.linearVelocity, transform, ShipFaction.Player);
+    }
+
+    private static bool IsUpgradeUnlocked(UpgradeId upgradeId)
+    {
+        PlayerUpgradeState state = PlayerUpgradeState.Current;
+        return state != null && state.IsUnlocked(upgradeId);
     }
 
     private static bool IsBuildPlacementActive()

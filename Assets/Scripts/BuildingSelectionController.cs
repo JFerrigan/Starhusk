@@ -13,6 +13,7 @@ public class BuildingSelectionController : MonoBehaviour
     private Texture2D pixel;
     private GUIStyle titleStyle;
     private GUIStyle bodyStyle;
+    private float styleScale;
     private Rect panelRect;
     private PlacedBuilding selectedBuilding;
     private CollectorAutomaton selectedCollector;
@@ -38,17 +39,6 @@ public class BuildingSelectionController : MonoBehaviour
     private void Awake()
     {
         pixel = Texture2D.whiteTexture;
-        titleStyle = new GUIStyle
-        {
-            fontSize = 15,
-            fontStyle = FontStyle.Bold,
-            normal = { textColor = Color.white }
-        };
-        bodyStyle = new GUIStyle
-        {
-            fontSize = 13,
-            normal = { textColor = Color.white }
-        };
     }
 
     private void Update()
@@ -88,6 +78,7 @@ public class BuildingSelectionController : MonoBehaviour
             return;
         }
 
+        EnsureStyles();
         float panelHeight = PanelHeight();
         float panelWidth = PanelWidthForSelection();
         EnsurePanelPosition(panelWidth, panelHeight);
@@ -95,7 +86,7 @@ public class BuildingSelectionController : MonoBehaviour
         HandlePanelDrag();
 
         DrawRect(panelRect, new Color(0f, 0f, 0f, 0.78f));
-        DrawRectOutline(panelRect, new Color(0.24f, 0.84f, 0.95f, 0.95f), 2f);
+        DrawRectOutline(panelRect, new Color(0.24f, 0.84f, 0.95f, 0.95f), S(2f));
 
         if (selectedBuilding is PlanetResourceExtractorBuilding extractor)
         {
@@ -129,13 +120,13 @@ public class BuildingSelectionController : MonoBehaviour
 
         if (selectedHub != null)
         {
-            DrawStoragePanel("Cargo Hub", selectedHub.Storage, panelRect.y + 36f);
+            DrawStoragePanel("Cargo Hub", selectedHub.Storage, panelRect.y + S(36f));
             return;
         }
 
         if (selectedStorage != null)
         {
-            DrawStoragePanel(selectedObject.name, selectedStorage, panelRect.y + 36f);
+            DrawStoragePanel(selectedObject.name, selectedStorage, panelRect.y + S(36f));
         }
     }
 
@@ -325,7 +316,7 @@ public void ClearSelection()
     {
         if (!hasPanelPosition)
         {
-            panelPosition = new Vector2(12f, Screen.height - panelHeight - 12f);
+            panelPosition = new Vector2(S(12f), Screen.height - panelHeight - S(12f));
             hasPanelPosition = true;
             return;
         }
@@ -341,7 +332,7 @@ public void ClearSelection()
             return;
         }
 
-        Rect dragRect = new Rect(panelRect.x, panelRect.y, panelRect.width, HeaderHeight);
+        Rect dragRect = new Rect(panelRect.x, panelRect.y, panelRect.width, S(HeaderHeight));
         if (current.type == EventType.MouseDown && current.button == 0 && dragRect.Contains(current.mousePosition))
         {
             draggingPanel = true;
@@ -361,17 +352,17 @@ public void ClearSelection()
 
     private void DrawExtractorPanel(PlanetResourceExtractorBuilding extractor)
     {
-        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 10f, 170f, 20f), extractor.DisplayName, titleStyle);
-        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 36f, 180f, 18f), "Planet: " + extractor.PlanetName, bodyStyle);
-        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 56f, 76f, 18f), "Resource:", bodyStyle);
-        ResourceGui.DrawIconLabel(new Rect(panelRect.x + 88f, panelRect.y + 56f, 120f, 18f), extractor.Storage.ResourceType, bodyStyle, Color.white);
+        GUI.Label(new Rect(panelRect.x + S(12f), panelRect.y + S(10f), S(170f), S(20f)), extractor.DisplayName, titleStyle);
+        GUI.Label(new Rect(panelRect.x + S(12f), panelRect.y + S(36f), S(180f), S(18f)), "Planet: " + extractor.PlanetName, bodyStyle);
+        GUI.Label(new Rect(panelRect.x + S(12f), panelRect.y + S(56f), S(76f), S(18f)), "Resource:", bodyStyle);
+        ResourceGui.DrawIconLabel(new Rect(panelRect.x + S(88f), panelRect.y + S(56f), S(120f), S(18f)), extractor.Storage.ResourceType, bodyStyle, Color.white, S(16f));
         GUI.Label(
-            new Rect(panelRect.x + 12f, panelRect.y + 76f, 190f, 18f),
+            new Rect(panelRect.x + S(12f), panelRect.y + S(76f), S(190f), S(18f)),
             "Stored: " + extractor.Storage.CurrentAmount + " / " + extractor.Storage.Capacity,
             bodyStyle
         );
 
-        if (GUI.Button(new Rect(panelRect.x + PanelWidth - 76f, panelRect.y + panelRect.height - 36f, 64f, 24f), "Move"))
+        if (GUI.Button(new Rect(panelRect.x + panelRect.width - S(76f), panelRect.y + panelRect.height - S(36f), S(64f), S(24f)), "Move"))
         {
             if (BuildingPlacementController.Instance != null)
             {
@@ -382,11 +373,11 @@ public void ClearSelection()
 
     private void DrawCollectorPanel(CollectorAutomaton collector)
     {
-        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 10f, 190f, 20f), "Collector", titleStyle);
-        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 36f, 190f, 18f), "Goal: " + collector.goal, bodyStyle);
-        GUI.Label(new Rect(panelRect.x + 12f, panelRect.y + 56f, 190f, 18f), "State: " + collector.State, bodyStyle);
-        DrawPowerStatus(collector, panelRect.y + 76f);
-        DrawStorageContents(collector.Cargo, panelRect.y + 100f);
+        GUI.Label(new Rect(panelRect.x + S(12f), panelRect.y + S(10f), S(190f), S(20f)), "Collector", titleStyle);
+        GUI.Label(new Rect(panelRect.x + S(12f), panelRect.y + S(36f), S(190f), S(18f)), "Goal: " + collector.goal, bodyStyle);
+        GUI.Label(new Rect(panelRect.x + S(12f), panelRect.y + S(56f), S(190f), S(18f)), "State: " + collector.State, bodyStyle);
+        DrawPowerStatus(collector, panelRect.y + S(76f));
+        DrawStorageContents(collector.Cargo, panelRect.y + S(100f));
     }
 
     private void DrawFreighterPanel(FreighterAutomaton freighter)
@@ -605,40 +596,40 @@ public void ClearSelection()
     {
         if (selectedFreighter != null)
         {
-            return Mathf.Max(FreighterPanelHeight + 130f, 420f + (ResourceLineCount(selectedFreighter.Cargo) * 18f));
+            return Mathf.Min(Screen.height - S(8f), Mathf.Max(S(FreighterPanelHeight + 130f), S(420f) + (ResourceLineCount(selectedFreighter.Cargo) * S(18f))));
         }
 
         if (selectedSatelliteFactory != null)
         {
-            return Mathf.Max(270f, 178f + (ResourceLineCount(selectedSatelliteFactory.Storage) * 18f));
+            return Mathf.Min(Screen.height - S(8f), Mathf.Max(S(270f), S(178f) + (ResourceLineCount(selectedSatelliteFactory.Storage) * S(18f))));
         }
 
         if (selectedCollector != null)
         {
-            return Mathf.Max(BasePanelHeight, 144f + (ResourceLineCount(selectedCollector.Cargo) * 18f));
+            return Mathf.Min(Screen.height - S(8f), Mathf.Max(S(BasePanelHeight), S(144f) + (ResourceLineCount(selectedCollector.Cargo) * S(18f))));
         }
 
         if (selectedPowerRelay != null)
         {
-            return BasePanelHeight;
+            return S(BasePanelHeight);
         }
 
         if (selectedHub != null)
         {
-            return Mathf.Max(BasePanelHeight + 30f, 108f + (ResourceLineCount(selectedHub.Storage) * 18f));
+            return Mathf.Min(Screen.height - S(8f), Mathf.Max(S(BasePanelHeight + 30f), S(108f) + (ResourceLineCount(selectedHub.Storage) * S(18f))));
         }
 
         if (selectedStorage != null && selectedBuilding == null)
         {
-            return Mathf.Max(BasePanelHeight + 30f, 108f + (ResourceLineCount(selectedStorage) * 18f));
+            return Mathf.Min(Screen.height - S(8f), Mathf.Max(S(BasePanelHeight + 30f), S(108f) + (ResourceLineCount(selectedStorage) * S(18f))));
         }
 
-        return BasePanelHeight;
+        return S(BasePanelHeight);
     }
 
     private float PanelWidthForSelection()
     {
-        return selectedFreighter == null ? PanelWidth : FreighterPanelWidth;
+        return Mathf.Min(Screen.width - S(8f), S(selectedFreighter == null ? PanelWidth : FreighterPanelWidth));
     }
 
     public static bool CanStorePlayerCargo(ResourceStorage storage, CollectorAutomaton selectedCollector, FreighterAutomaton selectedFreighter)
@@ -701,8 +692,43 @@ public void ClearSelection()
 
     private static Vector2 ClampToScreen(Vector2 position, Vector2 size)
     {
+        float margin = GameUiScale.Size(4f);
         return new Vector2(
-            Mathf.Clamp(position.x, 4f, Mathf.Max(4f, Screen.width - size.x - 4f)),
-            Mathf.Clamp(position.y, 4f, Mathf.Max(4f, Screen.height - size.y - 4f)));
+            Mathf.Clamp(position.x, margin, Mathf.Max(margin, Screen.width - size.x - margin)),
+            Mathf.Clamp(position.y, margin, Mathf.Max(margin, Screen.height - size.y - margin)));
+    }
+
+    public static Vector2 ClampPanelPositionForTests(Vector2 position, Vector2 size, float screenWidth, float screenHeight, float margin)
+    {
+        return new Vector2(
+            Mathf.Clamp(position.x, margin, Mathf.Max(margin, screenWidth - size.x - margin)),
+            Mathf.Clamp(position.y, margin, Mathf.Max(margin, screenHeight - size.y - margin)));
+    }
+
+    private void EnsureStyles()
+    {
+        float scale = GameUiScale.Current;
+        if (titleStyle != null && Mathf.Approximately(styleScale, scale))
+        {
+            return;
+        }
+
+        styleScale = scale;
+        titleStyle = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = GameUiScale.Font(15f, scale),
+            fontStyle = FontStyle.Bold,
+            normal = { textColor = Color.white }
+        };
+        bodyStyle = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = GameUiScale.Font(13f, scale),
+            normal = { textColor = Color.white }
+        };
+    }
+
+    private static float S(float value)
+    {
+        return GameUiScale.Size(value);
     }
 }

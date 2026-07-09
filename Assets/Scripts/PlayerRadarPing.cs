@@ -29,7 +29,7 @@ private bool hasNearestAsteroid;
     public float CooldownRemaining => Mathf.Max(0f, (lastPingTime + cooldownSeconds) - Time.time);
     public float LastPingTime => lastPingTime;
     public float PulseProgress => CalculatePulseProgress(Time.time, lastPingTime, pulseDuration);
-    public bool HasActivePing => Time.time <= lastPingTime + contactDuration;
+    public bool HasActivePing => Time.time <= lastPingTime + contactDuration || HasPersistentContacts(Time.time);
 
     private void Awake()
     {
@@ -79,8 +79,9 @@ float nearestStarDistance = float.MaxValue;
                 continue;
             }
 
+            float effectivePingRange = EffectivePingRange();
             float distance = Vector2.Distance(transform.position, marker.transform.position);
-            if (distance > pingRange)
+            if (distance > effectivePingRange)
             {
                 continue;
             }
@@ -140,6 +141,18 @@ else
 
     private void AddContact(MapMarker marker, bool revealResourceType)
     {
+        bool persistentDiscovery = IsUpgradeUnlocked(UpgradeId.PersistentRadarDiscovery);
+        if (persistentDiscovery)
+        {
+            DiscoveryState discovery = marker.GetComponent<DiscoveryState>();
+            if (discovery != null)
+            {
+                discovery.SetDiscovered(true);
+            }
+
+            marker.hiddenFromMapAndRadar = false;
+        }
+
         ResourceType? resourceType = null;
         if (revealResourceType)
         {
@@ -155,9 +168,14 @@ else
             marker.transform.position,
             marker.markerType,
             marker.markerColor,
-            lastPingTime + contactDuration,
+            persistentDiscovery ? float.PositiveInfinity : lastPingTime + contactDuration,
             resourceType
         ));
+    }
+
+    private float EffectivePingRange()
+    {
+        return IsUpgradeUnlocked(UpgradeId.InfiniteRadarRange) ? float.PositiveInfinity : pingRange;
     }
 
     private static int AsteroidContactLimit()
@@ -244,6 +262,19 @@ else
         }
     }
 
+    private bool HasPersistentContacts(float now)
+    {
+        for (int i = 0; i < contacts.Count; i++)
+        {
+            if (float.IsPositiveInfinity(contacts[i].expiresAt) && IsContactAvailable(contacts[i], now))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static bool IsReadyAtTime(float now, float lastPingTime, float cooldownSeconds)
     {
         return now >= lastPingTime + Mathf.Max(0f, cooldownSeconds);
@@ -309,7 +340,8 @@ else
 
         pulseRenderer.enabled = true;
         float easedProgress = 1f - ((1f - progress) * (1f - progress));
-        float radius = pingRange * easedProgress;
+        float pulseRange = float.IsInfinity(EffectivePingRange()) ? pingRange * 4f : pingRange;
+        float radius = pulseRange * easedProgress;
         Vector3 center = transform.position;
 
         for (int i = 0; i < PulseSegments; i++)

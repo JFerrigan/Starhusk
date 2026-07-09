@@ -24,8 +24,10 @@ public class BuildOptionsMenu : MonoBehaviour
     private GUIStyle itemNameStyle;
     private GUIStyle costStyle;
     private GUIStyle badgeStyle;
+    private float styleScale;
 
     public static Rect CurrentRect { get; private set; }
+    public bool IsOpen => isOpen;
 
     private struct BuildMenuItem
     {
@@ -41,14 +43,16 @@ public class BuildOptionsMenu : MonoBehaviour
 
     private void EnsureStyles()
     {
-        if (titleStyle != null)
+        float scale = GameUiScale.Current;
+        if (titleStyle != null && Mathf.Approximately(styleScale, scale))
         {
             return;
         }
 
+        styleScale = scale;
         titleStyle = new GUIStyle
         {
-            fontSize = 18,
+            fontSize = GameUiScale.Font(18f, scale),
             fontStyle = FontStyle.Bold,
             normal = { textColor = Color.white },
             alignment = TextAnchor.MiddleLeft
@@ -56,7 +60,7 @@ public class BuildOptionsMenu : MonoBehaviour
 
         resourceStyle = new GUIStyle
         {
-            fontSize = 11,
+            fontSize = GameUiScale.Font(11f, scale),
             fontStyle = FontStyle.Bold,
             normal = { textColor = new Color(0.82f, 0.98f, 1f, 1f) },
             alignment = TextAnchor.MiddleLeft
@@ -64,7 +68,7 @@ public class BuildOptionsMenu : MonoBehaviour
 
         tabStyle = new GUIStyle(GUI.skin.label)
         {
-            fontSize = 12,
+            fontSize = GameUiScale.Font(12f, scale),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
             normal = { textColor = Color.white }
@@ -72,7 +76,7 @@ public class BuildOptionsMenu : MonoBehaviour
 
         itemNameStyle = new GUIStyle
         {
-            fontSize = 12,
+            fontSize = GameUiScale.Font(12f, scale),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.UpperCenter,
             wordWrap = true,
@@ -81,7 +85,7 @@ public class BuildOptionsMenu : MonoBehaviour
 
         costStyle = new GUIStyle
         {
-            fontSize = 10,
+            fontSize = GameUiScale.Font(10f, scale),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleLeft,
             normal = { textColor = new Color(0.9f, 0.88f, 1f, 1f) }
@@ -89,7 +93,7 @@ public class BuildOptionsMenu : MonoBehaviour
 
         badgeStyle = new GUIStyle
         {
-            fontSize = 10,
+            fontSize = GameUiScale.Font(10f, scale),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
             normal = { textColor = Color.white }
@@ -116,54 +120,146 @@ public class BuildOptionsMenu : MonoBehaviour
         }
 
         EnsurePosition();
+        float scale = GameUiScale.Current;
         CurrentRect = windowRect;
         CollectVisibleItems();
 
         PixelUiSprites.Draw(windowRect, PixelUiFrame.Panel);
-        PixelUiSprites.Draw(new Rect(windowRect.x + 8f, windowRect.y + 8f, windowRect.width - 16f, HeaderHeight), PixelUiFrame.Header);
+        PixelUiSprites.Draw(new Rect(windowRect.x + GameUiScale.Size(8f, scale), windowRect.y + GameUiScale.Size(8f, scale), windowRect.width - GameUiScale.Size(16f, scale), GameUiScale.Size(HeaderHeight, scale)), PixelUiFrame.Header);
 
-        GUI.Label(new Rect(windowRect.x + 24f, windowRect.y + 18f, 420f, 28f), "BUILD MENU [I]", titleStyle);
-        DrawResources(new Rect(windowRect.x + 24f, windowRect.y + 66f, windowRect.width - 48f, 30f));
-        DrawTabs(new Rect(windowRect.x + 24f, windowRect.y + 110f, windowRect.width - 48f, TabHeight));
-        DrawItems(new Rect(windowRect.x + 24f, windowRect.y + 164f, windowRect.width - 48f, windowRect.height - 188f));
+        GUI.Label(new Rect(windowRect.x + GameUiScale.Size(24f, scale), windowRect.y + GameUiScale.Size(18f, scale), GameUiScale.Size(420f, scale), GameUiScale.Size(28f, scale)), "BUILD MENU [I]", titleStyle);
+        DrawResources(new Rect(windowRect.x + GameUiScale.Size(24f, scale), windowRect.y + GameUiScale.Size(66f, scale), windowRect.width - GameUiScale.Size(48f, scale), GameUiScale.Size(34f, scale)), scale);
+        DrawTabs(new Rect(windowRect.x + GameUiScale.Size(24f, scale), windowRect.y + GameUiScale.Size(112f, scale), windowRect.width - GameUiScale.Size(48f, scale), GameUiScale.Size(TabHeight, scale)), scale);
+        DrawItems(new Rect(windowRect.x + GameUiScale.Size(24f, scale), windowRect.y + GameUiScale.Size(166f, scale), windowRect.width - GameUiScale.Size(48f, scale), windowRect.height - GameUiScale.Size(190f, scale)), scale);
+    }
+
+    public bool CloseMenu()
+    {
+        if (!isOpen)
+        {
+            return false;
+        }
+
+        isOpen = false;
+        CurrentRect = Rect.zero;
+        return true;
+    }
+
+    public void OpenMenu()
+    {
+        isOpen = true;
     }
 
     private void DrawOpenButton()
     {
-        Rect buttonRect = new Rect(16f, Screen.height - 58f, 184f, 42f);
+        float scale = GameUiScale.Current;
+        float size = GameUiScale.Size(46f, scale);
+        Rect buttonRect = new Rect(GameUiScale.Size(16f, scale), Screen.height - size - GameUiScale.Size(16f, scale), size, size);
         bool hover = buttonRect.Contains(Event.current.mousePosition);
 
-        PixelUiSprites.Draw(buttonRect, hover ? PixelUiFrame.ButtonHover : PixelUiFrame.Button);
+        DrawLauncherButtonFrame(buttonRect, hover, scale);
         if (GUI.Button(buttonRect, GUIContent.none, GUIStyle.none))
         {
             isOpen = true;
         }
 
-        GUI.Label(buttonRect, "[I] BUILD", tabStyle);
+        DrawInventoryIcon(buttonRect, scale);
+    }
+
+    private static void DrawInventoryIcon(Rect rect, float scale)
+    {
+        Color color = PixelUiSprites.ConsoleAccent;
+        float lineWidth = GameUiScale.Size(2f, scale);
+        Rect box = new Rect(
+            rect.center.x - GameUiScale.Size(12f, scale),
+            rect.center.y - GameUiScale.Size(8f, scale),
+            GameUiScale.Size(24f, scale),
+            GameUiScale.Size(18f, scale));
+
+        DrawIconOutline(box, color, lineWidth);
+        DrawIconLine(new Vector2(box.xMin, box.y + GameUiScale.Size(6f, scale)), new Vector2(box.xMax, box.y + GameUiScale.Size(6f, scale)), color, lineWidth);
+        DrawIconLine(new Vector2(box.center.x, box.y + GameUiScale.Size(6f, scale)), new Vector2(box.center.x, box.yMax), color, lineWidth);
+        DrawIconLine(new Vector2(box.xMin + GameUiScale.Size(5f, scale), box.yMin), new Vector2(box.center.x, box.yMin - GameUiScale.Size(5f, scale)), color, lineWidth);
+        DrawIconLine(new Vector2(box.xMax - GameUiScale.Size(5f, scale), box.yMin), new Vector2(box.center.x, box.yMin - GameUiScale.Size(5f, scale)), color, lineWidth);
+    }
+
+    private static void DrawLauncherButtonFrame(Rect rect, bool hover, float scale)
+    {
+        Color fill = hover ? PixelUiSprites.ConsoleActive : PixelUiSprites.ConsoleSurface;
+        Color edge = hover ? PixelUiSprites.Cyan : PixelUiSprites.ConsoleAccent;
+        float border = GameUiScale.Size(2f, scale);
+        float inset = GameUiScale.Size(5f, scale);
+
+        DrawSolidRect(rect, new Color(0f, 0f, 0f, 0.48f));
+        Rect body = new Rect(rect.x + border, rect.y + border, rect.width - (border * 2f), rect.height - (border * 2f));
+        DrawSolidRect(body, fill);
+
+        DrawSolidRect(new Rect(body.x, body.y, body.width, border), edge);
+        DrawSolidRect(new Rect(body.x, body.yMax - border, body.width, border), PixelUiSprites.DarkPurple);
+        DrawSolidRect(new Rect(body.x, body.y, border, body.height), edge);
+        DrawSolidRect(new Rect(body.xMax - border, body.y, border, body.height), PixelUiSprites.DarkPurple);
+
+        DrawSolidRect(new Rect(body.x + inset, body.y + GameUiScale.Size(4f, scale), body.width - (inset * 2f), border), new Color(edge.r, edge.g, edge.b, 0.36f));
+    }
+
+    private static void DrawSolidRect(Rect rect, Color color)
+    {
+        Color previous = GUI.color;
+        GUI.color = color;
+        GUI.DrawTexture(rect, Texture2D.whiteTexture);
+        GUI.color = previous;
+    }
+
+    private static void DrawIconOutline(Rect rect, Color color, float width)
+    {
+        DrawIconLine(new Vector2(rect.xMin, rect.yMin), new Vector2(rect.xMax, rect.yMin), color, width);
+        DrawIconLine(new Vector2(rect.xMax, rect.yMin), new Vector2(rect.xMax, rect.yMax), color, width);
+        DrawIconLine(new Vector2(rect.xMax, rect.yMax), new Vector2(rect.xMin, rect.yMax), color, width);
+        DrawIconLine(new Vector2(rect.xMin, rect.yMax), new Vector2(rect.xMin, rect.yMin), color, width);
+    }
+
+    private static void DrawIconLine(Vector2 start, Vector2 end, Color color, float width)
+    {
+        Matrix4x4 previousMatrix = GUI.matrix;
+        Color previousColor = GUI.color;
+        Vector2 delta = end - start;
+        float angle = Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg;
+
+        GUI.color = color;
+        GUIUtility.RotateAroundPivot(angle, start);
+        GUI.DrawTexture(new Rect(start.x, start.y - (width * 0.5f), delta.magnitude, width), Texture2D.whiteTexture);
+        GUI.matrix = previousMatrix;
+        GUI.color = previousColor;
     }
 
     private void EnsurePosition()
     {
-        float margin = 48f;
+        float scale = GameUiScale.Current;
+        float margin = GameUiScale.Size(32f, scale);
         windowRect = new Rect(
             margin,
             margin,
-            Mathf.Max(340f, Screen.width - (margin * 2f)),
-            Mathf.Max(360f, Screen.height - (margin * 2f)));
+            Mathf.Max(GameUiScale.Size(340f, scale), Screen.width - (margin * 2f)),
+            Mathf.Max(GameUiScale.Size(360f, scale), Screen.height - (margin * 2f)));
     }
 
-    private void DrawResources(Rect rect)
+    private void DrawResources(Rect rect, float scale)
     {
         PixelUiSprites.Draw(rect, PixelUiFrame.InnerPanel);
-        ResourceGui.DrawAvailableResources(new Rect(rect.x + 8f, rect.y + 4f, rect.width - 16f, rect.height - 8f), resourceStyle);
+        ResourceGui.DrawAvailableResources(
+            new Rect(rect.x + GameUiScale.Size(8f, scale), rect.y + GameUiScale.Size(4f, scale), rect.width - GameUiScale.Size(16f, scale), rect.height - GameUiScale.Size(8f, scale)),
+            resourceStyle,
+            GameUiScale.Size(16f, scale),
+            GameUiScale.Size(64f, scale),
+            GameUiScale.Size(8f, scale));
     }
 
-    private void DrawTabs(Rect rect)
+    private void DrawTabs(Rect rect, float scale)
     {
         float tabWidth = rect.width / TabNames.Length;
         for (int i = 0; i < TabNames.Length; i++)
         {
-            Rect tabRect = new Rect(rect.x + (tabWidth * i), rect.y, tabWidth - 4f, rect.height);
+            Rect tabRect = new Rect(rect.x + (tabWidth * i), rect.y, tabWidth - GameUiScale.Size(4f, scale), rect.height);
             bool hover = tabRect.Contains(Event.current.mousePosition);
             PixelUiFrame frame = i == selectedTab ? PixelUiFrame.TabActive : hover ? PixelUiFrame.TabHover : PixelUiFrame.Tab;
 
@@ -178,19 +274,22 @@ public class BuildOptionsMenu : MonoBehaviour
         }
     }
 
-    private void DrawItems(Rect rect)
+    private void DrawItems(Rect rect, float scale)
     {
         PixelUiSprites.Draw(rect, PixelUiFrame.InnerPanel);
 
-        Rect padded = new Rect(rect.x + 10f, rect.y + 10f, rect.width - 20f, rect.height - 20f);
-        float viewWidth = Mathf.Max(1f, padded.width - 20f);
-        float contentHeight = PixelUiSprites.GridContentHeight(visibleItems.Count, viewWidth, CardWidth, CardHeight, CardSpacing);
+        Rect padded = new Rect(rect.x + GameUiScale.Size(10f, scale), rect.y + GameUiScale.Size(10f, scale), rect.width - GameUiScale.Size(20f, scale), rect.height - GameUiScale.Size(20f, scale));
+        float viewWidth = Mathf.Max(1f, padded.width - GameUiScale.Size(20f, scale));
+        float cardWidth = GameUiScale.Size(CardWidth, scale);
+        float cardHeight = GameUiScale.Size(CardHeight, scale);
+        float cardSpacing = GameUiScale.Size(CardSpacing, scale);
+        float contentHeight = PixelUiSprites.GridContentHeight(visibleItems.Count, viewWidth, cardWidth, cardHeight, cardSpacing);
         Rect viewRect = new Rect(0f, 0f, viewWidth, contentHeight);
 
         scrollPosition = GUI.BeginScrollView(padded, scrollPosition, viewRect);
 
-        int columns = PixelUiSprites.GridColumnCount(viewWidth, CardWidth, CardSpacing);
-        float gridWidth = (columns * CardWidth) + ((columns - 1) * CardSpacing);
+        int columns = PixelUiSprites.GridColumnCount(viewWidth, cardWidth, cardSpacing);
+        float gridWidth = (columns * cardWidth) + ((columns - 1) * cardSpacing);
         float startX = Mathf.Max(0f, (viewWidth - gridWidth) * 0.5f);
 
         for (int i = 0; i < visibleItems.Count; i++)
@@ -198,18 +297,18 @@ public class BuildOptionsMenu : MonoBehaviour
             int column = i % columns;
             int row = i / columns;
             Rect cardRect = new Rect(
-                startX + (column * (CardWidth + CardSpacing)),
-                row * (CardHeight + CardSpacing),
-                CardWidth,
-                CardHeight);
+                startX + (column * (cardWidth + cardSpacing)),
+                row * (cardHeight + cardSpacing),
+                cardWidth,
+                cardHeight);
 
-            DrawCard(cardRect, visibleItems[i]);
+            DrawCard(cardRect, visibleItems[i], scale);
         }
 
         GUI.EndScrollView();
     }
 
-    private void DrawCard(Rect rect, BuildMenuItem item)
+    private void DrawCard(Rect rect, BuildMenuItem item, float scale)
     {
         bool enabled = !item.unlocked && item.affordable;
         bool hover = rect.Contains(Event.current.mousePosition);
@@ -221,9 +320,9 @@ public class BuildOptionsMenu : MonoBehaviour
 
         PixelUiSprites.Draw(rect, frame);
 
-        Rect spriteRect = new Rect(rect.x + 22f, rect.y + 16f, rect.width - 44f, 82f);
-        Rect nameRect = new Rect(rect.x + 10f, rect.y + 104f, rect.width - 20f, 34f);
-        Rect costRect = new Rect(rect.x + 10f, rect.y + 140f, rect.width - 20f, 22f);
+        Rect spriteRect = new Rect(rect.x + GameUiScale.Size(22f, scale), rect.y + GameUiScale.Size(16f, scale), rect.width - GameUiScale.Size(44f, scale), GameUiScale.Size(82f, scale));
+        Rect nameRect = new Rect(rect.x + GameUiScale.Size(10f, scale), rect.y + GameUiScale.Size(104f, scale), rect.width - GameUiScale.Size(20f, scale), GameUiScale.Size(34f, scale));
+        Rect costRect = new Rect(rect.x + GameUiScale.Size(10f, scale), rect.y + GameUiScale.Size(140f, scale), rect.width - GameUiScale.Size(20f, scale), GameUiScale.Size(22f, scale));
 
         DrawPreview(spriteRect, item.sprite, enabled || item.unlocked ? item.tint : Dim(item.tint));
 
@@ -231,16 +330,16 @@ public class BuildOptionsMenu : MonoBehaviour
 
         if (item.unlocked)
         {
-            Rect badgeRect = new Rect(rect.x + 25f, rect.y + 134f, rect.width - 50f, 24f);
+            Rect badgeRect = new Rect(rect.x + GameUiScale.Size(25f, scale), rect.y + GameUiScale.Size(134f, scale), rect.width - GameUiScale.Size(50f, scale), GameUiScale.Size(24f, scale));
             PixelUiSprites.Draw(badgeRect, PixelUiFrame.Badge);
             GUI.Label(badgeRect, "UNLOCKED", badgeStyle);
         }
         else
         {
-            ResourceGui.DrawCostRow(costRect, item.cost, costStyle);
+            ResourceGui.DrawCostRow(costRect, item.cost, costStyle, true, GameUiScale.Size(16f, scale), GameUiScale.Size(44f, scale), GameUiScale.Size(6f, scale));
             if (!item.affordable)
             {
-                Rect badgeRect = new Rect(rect.x + rect.width - 64f, rect.y + 8f, 54f, 22f);
+                Rect badgeRect = new Rect(rect.x + rect.width - GameUiScale.Size(64f, scale), rect.y + GameUiScale.Size(8f, scale), GameUiScale.Size(54f, scale), GameUiScale.Size(22f, scale));
                 PixelUiSprites.Draw(badgeRect, PixelUiFrame.WarningBadge);
                 GUI.Label(badgeRect, "NO RES", badgeStyle);
             }

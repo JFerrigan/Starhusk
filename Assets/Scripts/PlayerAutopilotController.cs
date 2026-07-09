@@ -9,6 +9,7 @@ public class PlayerAutopilotController : MonoBehaviour
     private const float FallbackSimpleAcceleration = 8f;
     private const float FallbackSimpleStopDeceleration = 28f;
     private const float ArrivalBrakeSafetyMultiplier = 1.15f;
+    private const float MinimumTargetDistance = 0.0001f;
 
     public float arrivalRadius = 3f;
     public float waypointArrivalRadius = 4f;
@@ -17,6 +18,10 @@ public class PlayerAutopilotController : MonoBehaviour
     public float routeProbeRadius = 1.5f;
     public float obstacleClearance = 5f;
     public int maxRouteIterations = 8;
+    public float newtonianWaypointStopSpeed = 1.5f;
+    public float newtonianArrivalStopSpeed = 0.5f;
+    public float newtonianTurnBrakeMultiplier = 1.15f;
+    public float newtonianVelocityCorrectionThreshold = 0.1f;
 
     private readonly List<Vector2> waypoints = new List<Vector2>();
     private Rigidbody2D rb;
@@ -52,62 +57,41 @@ public class PlayerAutopilotController : MonoBehaviour
             return;
         }
 
-        Vector2 position = rb.position;
-        if (Vector2.Distance(position, destination) <= Mathf.Max(0.1f, arrivalRadius))
-        {
-            CancelAutopilot();
-            return;
-        }
-
-        if (waypoints.Count == 0)
-        {
-            RebuildRoute(position, destination);
-        }
-
-        waypointIndex = Mathf.Clamp(waypointIndex, 0, Mathf.Max(0, waypoints.Count - 1));
-        while (waypointIndex < waypoints.Count - 1 && Vector2.Distance(position, waypoints[waypointIndex]) <= Mathf.Max(0.1f, waypointArrivalRadius))
-        {
-            waypointIndex++;
-        }
-
-        Vector2 target = waypoints[Mathf.Min(waypointIndex, waypoints.Count - 1)];
-        if (SegmentBlocked(position, target, out _) && waypointIndex < waypoints.Count)
-        {
-            RebuildRoute(position, destination);
-            target = waypoints[Mathf.Min(waypointIndex, waypoints.Count - 1)];
-        }
-
-        Vector2 toTarget = target - position;
-        if (toTarget.sqrMagnitude <= 0.0001f)
-        {
-            return;
-        }
-
-        float desiredAngle = (Mathf.Atan2(toTarget.y, toTarget.x) * Mathf.Rad2Deg) - 90f;
-        float nextAngle = Mathf.LerpAngle(rb.rotation, desiredAngle, Mathf.Clamp01(steeringResponsiveness * Time.fixedDeltaTime));
-        rb.MoveRotation(nextAngle);
-
-        Vector2 forward = ForwardFromRotation(nextAngle);
         if (GameSettings.MovementControl == MovementControlType.Simple)
         {
-            rb.linearVelocity = PlayerMovement.CalculateSimpleVelocity(
-                rb.linearVelocity,
-                forward,
-                ShouldBrakeForArrival(position, SimpleStopDeceleration) ? 0f : 1f,
-                SimpleAcceleration,
-                SimpleStopDeceleration,
-                Time.fixedDeltaTime);
-        }
-        else if (ShouldBrakeForArrival(position, BrakeDeceleration))
-        {
-            rb.linearVelocity = Vector2.MoveTowards(
-                rb.linearVelocity,
-                Vector2.zero,
-                BrakeDeceleration * Time.fixedDeltaTime);
+            if (HasSimpleArrived(rb.position))
+            {
+                CancelAutopilot();
+                return;
+            }
+
+            if (!TryMaintainRoute(rb.position, false, out Vector2 target))
+            {
+                return;
+            }
+
+            ApplySimpleMovement(target);
         }
         else
         {
-            rb.AddForce(forward * ThrustForce);
+            if (HasNewtonianArrived(rb.position))
+            {
+                CancelAutopilot();
+                return;
+            }
+
+            if (IsInsideArrivalRadius(rb.position))
+            {
+                ApplyNewtonianBrake(Vector2.zero);
+                return;
+            }
+
+            if (!TryMaintainRoute(rb.position, true, out Vector2 target))
+            {
+                return;
+            }
+
+            ApplyNewtonianMovement(target);
         }
     }
 
@@ -311,6 +295,201 @@ public class PlayerAutopilotController : MonoBehaviour
         float fixedStepTravel = speed * Time.fixedDeltaTime;
         float brakeDistance = stoppingDistance + brakeBuffer + fixedStepTravel + Mathf.Max(0.1f, arrivalRadius);
         return destinationDistance <= brakeDistance;
+    }
+
+    private bool TryMaintainRoute(Vector2 position, bool velocityAware, out Vector2 target)
+    {
+        if (waypoints.Count == 0)
+        {
+            RebuildRoute(position, destination);
+        }
+
+        waypointIndex = Mathf.Clamp(waypointIndex, 0, Mathf.Max(0, waypoints.Count - 1));
+        AdvanceWaypointIfReady(position, velocityAware);
+
+        target = waypoints[Mathf.Min(waypointIndex, waypoints.Count - 1)];
+        if (SegmentBlocked(position, target, out _) && waypointIndex < waypoints.Count)
+        {
+            RebuildRoute(position, destination);
+            target = waypoints[Mathf.Min(waypointIndex, waypoints.Count - 1)];
+        }
+
+        return (target - position).sqrMagnitude > MinimumTargetDistance;
+    }
+
+    private void AdvanceWaypointIfReady(Vector2 position, bool velocityAware)
+    {
+        float handoffRadius = Mathf.Max(0.1f, waypointArrivalRadius);
+        while (waypointIndex < waypoints.Count - 1 && Vector2.Distance(position, waypoints[waypointIndex]) <= handoffRadius)
+        {
+            if (velocityAware && !CanAdvanceNewtonianWaypoint(position, waypointIndex))
+            {
+                return;
+            }
+
+            waypointIndex++;
+        }
+    }
+
+    private bool CanAdvanceNewtonianWaypoint(Vector2 position, int currentWaypointIndex)
+    {
+        if (rb == null || currentWaypointIndex >= waypoints.Count - 1)
+        {
+            return true;
+        }
+
+        Vector2 nextLeg = waypoints[currentWaypointIndex + 1] - waypoints[currentWaypointIndex];
+        if (nextLeg.sqrMagnitude <= MinimumTargetDistance)
+        {
+            return true;
+        }
+
+        Vector2 velocity = rb.linearVelocity;
+        if (velocity.magnitude <= Mathf.Max(0f, newtonianWaypointStopSpeed))
+        {
+            return true;
+        }
+
+        Vector2 nextDirection = nextLeg.normalized;
+        Vector2 positionToNext = waypoints[currentWaypointIndex + 1] - position;
+        Vector2 desiredDirection = positionToNext.sqrMagnitude > MinimumTargetDistance ? positionToNext.normalized : nextDirection;
+        float alongNextLeg = Vector2.Dot(velocity, desiredDirection);
+        float sidewaysSpeed = Mathf.Abs(Vector2.Dot(velocity, new Vector2(-nextDirection.y, nextDirection.x)));
+
+        return alongNextLeg >= 0f && sidewaysSpeed <= Mathf.Max(0f, newtonianWaypointStopSpeed);
+    }
+
+    private void ApplySimpleMovement(Vector2 target)
+    {
+        Vector2 toTarget = target - rb.position;
+        if (toTarget.sqrMagnitude <= MinimumTargetDistance)
+        {
+            return;
+        }
+
+        float nextAngle = RotateToward(toTarget);
+        Vector2 forward = ForwardFromRotation(nextAngle);
+        rb.linearVelocity = PlayerMovement.CalculateSimpleVelocity(
+            rb.linearVelocity,
+            forward,
+            ShouldBrakeForArrival(rb.position, SimpleStopDeceleration) ? 0f : 1f,
+            SimpleAcceleration,
+            SimpleStopDeceleration,
+            Time.fixedDeltaTime);
+    }
+
+    private void ApplyNewtonianMovement(Vector2 target)
+    {
+        Vector2 desiredVelocity = CalculateNewtonianDesiredVelocity(target);
+        Vector2 velocityError = desiredVelocity - rb.linearVelocity;
+        if (velocityError.sqrMagnitude <= Mathf.Max(0f, newtonianVelocityCorrectionThreshold) * Mathf.Max(0f, newtonianVelocityCorrectionThreshold))
+        {
+            ApplyNewtonianBrake(desiredVelocity);
+            return;
+        }
+
+        float nextAngle = RotateToward(velocityError);
+        Vector2 forward = ForwardFromRotation(nextAngle);
+        if (ShouldUseNewtonianThrust(forward, desiredVelocity, velocityError))
+        {
+            rb.AddForce(forward * ThrustForce);
+        }
+        else
+        {
+            ApplyNewtonianBrake(desiredVelocity);
+        }
+    }
+
+    private Vector2 CalculateNewtonianDesiredVelocity(Vector2 target)
+    {
+        Vector2 toTarget = target - rb.position;
+        if (toTarget.sqrMagnitude <= MinimumTargetDistance)
+        {
+            return Vector2.zero;
+        }
+
+        float targetDistance = toTarget.magnitude;
+        Vector2 directionToTarget = toTarget / targetDistance;
+        if (IsFinalWaypoint())
+        {
+            float stopDistance = Mathf.Max(0f, targetDistance - Mathf.Max(0.1f, arrivalRadius));
+            return directionToTarget * CalculateSafeNewtonianSpeed(stopDistance, ArrivalBrakeSafetyMultiplier);
+        }
+
+        return directionToTarget * CalculateSafeNewtonianSpeed(targetDistance, newtonianTurnBrakeMultiplier);
+    }
+
+    private float CalculateSafeNewtonianSpeed(float distance, float brakeMultiplier)
+    {
+        float deceleration = BrakeDeceleration;
+        if (deceleration <= 0.0001f)
+        {
+            return Mathf.Max(0f, rb == null ? 0f : rb.linearVelocity.magnitude);
+        }
+
+        float multiplier = Mathf.Max(1f, brakeMultiplier);
+        return Mathf.Sqrt(2f * deceleration * Mathf.Max(0f, distance)) / multiplier;
+    }
+
+    private bool ShouldUseNewtonianThrust(Vector2 forward, Vector2 desiredVelocity, Vector2 velocityError)
+    {
+        if (ThrustForce <= 0f)
+        {
+            return false;
+        }
+
+        float threshold = Mathf.Max(0f, newtonianVelocityCorrectionThreshold);
+        if (velocityError.magnitude <= threshold)
+        {
+            return false;
+        }
+
+        Vector2 currentVelocity = rb.linearVelocity;
+        float currentSpeed = currentVelocity.magnitude;
+        float desiredSpeed = desiredVelocity.magnitude;
+        if (currentSpeed > desiredSpeed + threshold && Vector2.Dot(currentVelocity, desiredVelocity) > 0f)
+        {
+            return false;
+        }
+
+        return Vector2.Dot(forward, velocityError) > threshold;
+    }
+
+    private bool HasSimpleArrived(Vector2 position)
+    {
+        return IsInsideArrivalRadius(position);
+    }
+
+    private bool HasNewtonianArrived(Vector2 position)
+    {
+        return IsInsideArrivalRadius(position)
+            && (rb == null || rb.linearVelocity.magnitude <= Mathf.Max(0f, newtonianArrivalStopSpeed));
+    }
+
+    private bool IsInsideArrivalRadius(Vector2 position)
+    {
+        return Vector2.Distance(position, destination) <= Mathf.Max(0.1f, arrivalRadius);
+    }
+
+    private void ApplyNewtonianBrake(Vector2 targetVelocity)
+    {
+        rb.linearVelocity = Vector2.MoveTowards(
+            rb.linearVelocity,
+            targetVelocity,
+            BrakeDeceleration * Time.fixedDeltaTime);
+    }
+
+    private bool IsFinalWaypoint()
+    {
+        return waypointIndex >= waypoints.Count - 1;
+    }
+
+    private float RotateToward(Vector2 direction)
+    {
+        float desiredAngle = (Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg) - 90f;
+        float nextAngle = Mathf.LerpAngle(rb.rotation, desiredAngle, Mathf.Clamp01(steeringResponsiveness * Time.fixedDeltaTime));
+        rb.MoveRotation(nextAngle);
+        return nextAngle;
     }
 
     private float ThrustForce => movement == null ? FallbackThrustForce : movement.thrustForce;

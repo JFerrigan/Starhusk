@@ -38,6 +38,16 @@ public class ShipCrashDamage : MonoBehaviour
             return false;
         }
 
+        if (IsUpgradeUnlocked(UpgradeId.ImpactShield))
+        {
+            return false;
+        }
+
+        if (IsUpgradeUnlocked(UpgradeId.AsteroidCarverHull) && other.GetComponentInParent<CircularDestructibleAsteroid>() != null)
+        {
+            return false;
+        }
+
         if (!CanDamageFromCollision(other))
         {
             return false;
@@ -77,5 +87,16 @@ public class ShipCrashDamage : MonoBehaviour
 
         MapMarker marker = other.GetComponentInParent<MapMarker>();
         return marker != null && (marker.markerType == MapMarkerType.Planet || marker.markerType == MapMarkerType.Star);
+    }
+
+    private bool IsUpgradeUnlocked(UpgradeId upgradeId)
+    {
+        PlayerUpgradeState state = GetComponent<PlayerUpgradeState>();
+        if (state == null)
+        {
+            state = PlayerUpgradeState.Current;
+        }
+
+        return state != null && state.IsUnlocked(upgradeId);
     }
 }

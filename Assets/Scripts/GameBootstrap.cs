@@ -204,6 +204,11 @@ public class GameBootstrap : MonoBehaviour
             inventory.gameObject.AddComponent<PlayerWeaponController>();
         }
 
+        if (inventory.GetComponent<AsteroidCarverHull>() == null)
+        {
+            inventory.gameObject.AddComponent<AsteroidCarverHull>();
+        }
+
         ApplyStartingResources(inventory, currentRules);
 
         if (inventory.GetComponent<ObjectIdentity>() == null)

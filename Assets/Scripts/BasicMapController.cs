@@ -10,17 +10,17 @@ public class BasicMapController : MonoBehaviour
     public Color minimapBackground = new Color(0.02f, 0.04f, 0.07f, 0.82f);
     public Color fullMapBackground = new Color(0.01f, 0.02f, 0.04f, 0.94f);
     public Color boundaryColor = new Color(0.35f, 0.58f, 0.72f, 0.75f);
-    public Color undiscoveredColor = new Color(0.45f, 0.48f, 0.52f, 0.35f);
     public Color autopilotRouteColor = new Color(0.35f, 1f, 0.78f, 0.85f);
     public Color autopilotDestinationColor = new Color(1f, 0.92f, 0.35f, 0.95f);
 
     private bool fullMapOpen;
     private StarSystemGenerator generator;
     private ResourceInventory playerInventory;
-    private PlayerRadarPing radarPing;
     private PlayerAutopilotController autopilot;
     private Texture2D pixel;
     private GUIStyle labelStyle;
+
+    public bool IsFullMapOpen => fullMapOpen;
 
     private void Awake()
     {
@@ -50,11 +50,6 @@ public class BasicMapController : MonoBehaviour
             playerInventory = FindFirstObjectByType<ResourceInventory>();
         }
 
-        if (radarPing == null && playerInventory != null)
-        {
-            radarPing = playerInventory.GetComponent<PlayerRadarPing>();
-        }
-
         if (autopilot == null && playerInventory != null)
         {
             autopilot = playerInventory.GetComponent<PlayerAutopilotController>();
@@ -75,10 +70,6 @@ public class BasicMapController : MonoBehaviour
             minimapSize
         );
 
-        DrawMap(minimapRect, minimapBackground, false);
-        Rect mapButtonRect = new Rect(minimapRect.x, minimapRect.yMax + 6f, minimapRect.width, 24f);
-        DrawMapButton(mapButtonRect);
-
         if (fullMapOpen)
         {
             Rect fullMapRect = new Rect(
@@ -89,13 +80,33 @@ public class BasicMapController : MonoBehaviour
             );
 
             DrawMap(fullMapRect, fullMapBackground, true);
-            HandleFullMapClick(fullMapRect, minimapRect, mapButtonRect);
+            HandleFullMapClick(fullMapRect);
+            return;
         }
+
+        DrawMap(minimapRect, minimapBackground, false);
+        HandleMinimapClick(minimapRect);
     }
 
     private void ToggleFullMap()
     {
         fullMapOpen = !fullMapOpen;
+    }
+
+    public void OpenFullMap()
+    {
+        fullMapOpen = true;
+    }
+
+    public bool CloseFullMap()
+    {
+        if (!fullMapOpen)
+        {
+            return false;
+        }
+
+        fullMapOpen = false;
+        return true;
     }
 
     public static Vector2 WorldToMapPosition(Vector2 worldPosition, Rect mapRect, float systemRadius)
@@ -120,14 +131,25 @@ public class BasicMapController : MonoBehaviour
 
     public static bool TryGetAutopilotDestinationFromMapClick(Vector2 mousePosition, Rect mapRect, float systemRadius, out Vector2 destination)
     {
+        return TryGetAutopilotDestinationFromMapClick(mousePosition, mapRect, systemRadius, IsUpgradeUnlocked(UpgradeId.AutopilotUnlock), out destination);
+    }
+
+    public static bool TryGetAutopilotDestinationFromMapClick(Vector2 mousePosition, Rect mapRect, float systemRadius, bool autopilotUnlocked, out Vector2 destination)
+    {
         destination = Vector2.zero;
-        if (!mapRect.Contains(mousePosition) || FullMapUiRect(mapRect).Contains(mousePosition))
+        if (!autopilotUnlocked || !mapRect.Contains(mousePosition) || FullMapUiRect(mapRect).Contains(mousePosition))
         {
             return false;
         }
 
         destination = MapToWorldPosition(mousePosition, mapRect, systemRadius);
         return true;
+    }
+
+    private static bool IsUpgradeUnlocked(UpgradeId upgradeId)
+    {
+        PlayerUpgradeState state = PlayerUpgradeState.Current;
+        return state != null && state.IsUnlocked(upgradeId);
     }
 
     private void DrawMap(Rect rect, Color backgroundColor, bool includeLabels)
@@ -158,7 +180,6 @@ public class BasicMapController : MonoBehaviour
 
         if (playerMarker != null)
         {
-            DrawRadarOverlay(rect, playerMarker);
             DrawMarker(playerMarker, rect, includeLabels);
         }
 
@@ -177,15 +198,10 @@ public class BasicMapController : MonoBehaviour
         }
     }
 
-    private void HandleFullMapClick(Rect fullMapRect, Rect minimapRect, Rect mapButtonRect)
+    private void HandleFullMapClick(Rect fullMapRect)
     {
         Event current = Event.current;
         if (current == null || current.type != EventType.MouseDown || current.button != 0)
-        {
-            return;
-        }
-
-        if (minimapRect.Contains(current.mousePosition) || mapButtonRect.Contains(current.mousePosition))
         {
             return;
         }
@@ -202,6 +218,23 @@ public class BasicMapController : MonoBehaviour
         }
 
         autopilot.SetDestination(destination);
+        current.Use();
+    }
+
+    private void HandleMinimapClick(Rect minimapRect)
+    {
+        Event current = Event.current;
+        if (current == null || current.type != EventType.MouseDown || current.button != 0)
+        {
+            return;
+        }
+
+        if (!minimapRect.Contains(current.mousePosition))
+        {
+            return;
+        }
+
+        OpenFullMap();
         current.Use();
     }
 
@@ -236,81 +269,6 @@ public class BasicMapController : MonoBehaviour
         return new Rect(mapRect.x + 12f, mapRect.y + 10f, 380f, 64f);
     }
 
-    private void DrawRadarOverlay(Rect rect, MapMarker playerMarker)
-    {
-        if (radarPing == null || playerMarker == null)
-        {
-            return;
-        }
-
-        Vector2 playerPosition = WorldToMapPosition(playerMarker.transform.position, rect, generator.EffectiveSystemRadius);
-        float progress = radarPing.PulseProgress;
-        if (progress < 1f)
-        {
-            float easedProgress = 1f - ((1f - progress) * (1f - progress));
-            float mapRadius = (radarPing.pingRange / Mathf.Max(1f, generator.EffectiveSystemRadius)) * (Mathf.Min(rect.width, rect.height) * 0.5f);
-            Color pulseColor = new Color(0.22f, 0.95f, 1f, Mathf.Lerp(0.85f, 0.05f, progress));
-            DrawCircle(playerPosition, mapRadius * easedProgress, pulseColor, 80);
-        }
-
-        IReadOnlyList<RadarContact> contacts = radarPing.ActiveContacts;
-        for (int i = 0; i < contacts.Count; i++)
-        {
-            RadarContact contact = contacts[i];
-            if (!PlayerRadarPing.IsContactAvailable(contact, Time.time))
-            {
-                continue;
-            }
-
-            DrawRadarContact(contact, rect);
-        }
-    }
-
-    private void DrawRadarContact(RadarContact contact, Rect rect)
-    {
-        Vector2 position = WorldToMapPosition(contact.worldPosition, rect, generator.EffectiveSystemRadius);
-        float size = Mathf.Max(5f, MarkerSize(contact.markerType) * 0.85f);
-        Color color = RadarContactColor(contact);
-
-        DrawRect(new Rect(position.x - (size * 0.5f), position.y - (size * 0.5f), size, size), color);
-        DrawRectOutline(new Rect(position.x - (size * 0.8f), position.y - (size * 0.8f), size * 1.6f, size * 1.6f), new Color(color.r, color.g, color.b, 0.45f), 1f);
-        if (contact.resourceType.HasValue)
-        {
-            GUI.Label(new Rect(position.x + size, position.y - 8f, 120f, 22f), contact.resourceType.Value.ToString(), labelStyle);
-        }
-    }
-
-    private void DrawMapButton(Rect rect)
-    {
-        DrawRect(rect, new Color(0.02f, 0.04f, 0.07f, 0.86f));
-        DrawRectOutline(rect, new Color(0.7f, 0.9f, 1f, 0.5f), 2f);
-        if (GUI.Button(rect, "[M] MAP"))
-        {
-            ToggleFullMap();
-        }
-    }
-
-    private Color RadarContactColor(RadarContact contact)
-    {
-        switch (contact.markerType)
-        {
-            case MapMarkerType.Star:
-                return new Color(1f, 0.76f, 0.22f, 0.95f);
-            case MapMarkerType.Planet:
-                return new Color(0.28f, 0.95f, 1f, 0.95f);
-            case MapMarkerType.Pirate:
-                return new Color(1f, 0.24f, 0.16f, 0.95f);
-            case MapMarkerType.Collector:
-                return new Color(0.45f, 0.95f, 1f, 0.95f);
-            case MapMarkerType.Hub:
-                return new Color(1f, 0.86f, 0.38f, 0.95f);
-            case MapMarkerType.PowerRelay:
-                return new Color(1f, 0.9f, 0.36f, 0.95f);
-            default:
-                return new Color(Mathf.Max(0.48f, contact.color.r), Mathf.Max(0.82f, contact.color.g), Mathf.Max(0.9f, contact.color.b), 0.9f);
-        }
-    }
-
     private void DrawMarker(MapMarker marker, Rect rect, bool includeLabels)
     {
         if (marker == null)
@@ -324,25 +282,24 @@ public class BasicMapController : MonoBehaviour
         }
 
         bool visible = marker.IsVisible;
-        if (!visible && !includeLabels)
+        if (!visible)
         {
             return;
         }
 
         Vector2 position = WorldToMapPosition(marker.transform.position, rect, generator.EffectiveSystemRadius);
         float size = MarkerSize(marker.markerType) * Mathf.Max(0.5f, marker.iconScale) * (includeLabels ? 1.25f : 1f);
-        Color color = visible ? marker.markerColor : undiscoveredColor;
 
         if (marker.markerType == MapMarkerType.Player)
         {
-            DrawPlayerMarker(position, size, color, marker.transform.eulerAngles.z);
+            DrawPlayerMarker(position, size, marker.markerColor, marker.transform.eulerAngles.z);
         }
         else
         {
-            DrawRect(new Rect(position.x - (size * 0.5f), position.y - (size * 0.5f), size, size), color);
+            DrawRect(new Rect(position.x - (size * 0.5f), position.y - (size * 0.5f), size, size), marker.markerColor);
         }
 
-        if (includeLabels && visible && marker.markerType != MapMarkerType.Asteroid)
+        if (includeLabels && marker.markerType != MapMarkerType.Asteroid)
         {
             GUI.Label(new Rect(position.x + size, position.y - 8f, 160f, 22f), marker.name, labelStyle);
         }

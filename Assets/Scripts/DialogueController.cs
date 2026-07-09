@@ -11,6 +11,9 @@ public class DialogueController : MonoBehaviour
     private GUIStyle speakerStyle;
     private GUIStyle bodyStyle;
     private GUIStyle buttonStyle;
+    private float styleScale;
+    private Vector2 textScrollPosition;
+    private Vector2 choiceScrollPosition;
 
     public bool IsDialogueOpen => activeDefinition != null && activeNode != null;
     public string CurrentNodeId => activeNode == null ? null : activeNode.id;
@@ -112,30 +115,36 @@ public class DialogueController : MonoBehaviour
             return;
         }
 
-        float margin = Mathf.Clamp(Screen.width * 0.04f, 18f, 52f);
-        float panelHeight = Mathf.Clamp(Screen.height * 0.34f, 190f, 292f);
-        Rect panelRect = new Rect(margin, Screen.height - panelHeight - margin, Screen.width - (margin * 2f), panelHeight);
+        float scale = GameUiScale.Current;
+        float margin = Mathf.Clamp(Screen.width * 0.035f, GameUiScale.Size(12f, scale), GameUiScale.Size(32f, scale));
+        float resourceBarTop = Screen.height - GameUiScale.Size(32f, scale) - GameUiScale.Size(14f, scale);
+        float bottomGap = GameUiScale.Size(10f, scale);
+        float availableHeight = Mathf.Max(GameUiScale.Size(96f, scale), resourceBarTop - bottomGap - margin);
+        float panelHeight = Mathf.Clamp(Screen.height * 0.26f, GameUiScale.Size(96f, scale), availableHeight);
+        Rect panelRect = new Rect(margin, resourceBarTop - bottomGap - panelHeight, Screen.width - (margin * 2f), panelHeight);
         PixelUiSprites.Draw(panelRect, PixelUiFrame.Panel);
 
-        float inset = 16f;
-        Rect portraitRect = new Rect(panelRect.x + inset, panelRect.y + inset, Mathf.Min(104f, panelRect.height - (inset * 2f)), Mathf.Min(104f, panelRect.height - (inset * 2f)));
+        float inset = GameUiScale.Size(14f, scale);
+        float portraitSize = Mathf.Min(GameUiScale.Size(104f, scale), panelRect.height - (inset * 2f));
+        Rect portraitRect = new Rect(panelRect.x + inset, panelRect.y + inset, portraitSize, portraitSize);
         GUI.DrawTexture(portraitRect, DialoguePortraits.GetPortrait(activeNode.portraitId), ScaleMode.ScaleToFit, true);
 
-        float textX = portraitRect.xMax + 18f;
-        Rect speakerRect = new Rect(textX, panelRect.y + 18f, panelRect.xMax - textX - inset, 34f);
+        float textX = portraitRect.xMax + GameUiScale.Size(18f, scale);
+        Rect speakerRect = new Rect(textX, panelRect.y + GameUiScale.Size(18f, scale), panelRect.xMax - textX - inset, GameUiScale.Size(34f, scale));
         GUI.Label(speakerRect, string.IsNullOrEmpty(activeNode.speakerName) ? "Unknown" : activeNode.speakerName, speakerStyle);
 
-        float choiceAreaHeight = visibleChoices.Count > 0 ? Mathf.Min(146f, 38f * visibleChoices.Count) : 46f;
-        Rect textRect = new Rect(textX, speakerRect.yMax + 4f, panelRect.xMax - textX - inset, panelRect.height - 58f - choiceAreaHeight);
-        GUI.Label(textRect, activeNode.text, bodyStyle);
+        float choiceRowHeight = GameUiScale.Size(38f, scale);
+        float choiceAreaHeight = visibleChoices.Count > 0 ? Mathf.Min(GameUiScale.Size(146f, scale), choiceRowHeight * visibleChoices.Count) : GameUiScale.Size(46f, scale);
+        Rect textRect = new Rect(textX, speakerRect.yMax + GameUiScale.Size(4f, scale), panelRect.xMax - textX - inset, panelRect.height - GameUiScale.Size(58f, scale) - choiceAreaHeight);
+        DrawDialogueText(textRect, scale);
 
         if (visibleChoices.Count > 0)
         {
-            DrawChoices(new Rect(textX, panelRect.yMax - choiceAreaHeight - inset + 6f, panelRect.xMax - textX - inset, choiceAreaHeight));
+            DrawChoices(new Rect(textX, panelRect.yMax - choiceAreaHeight - inset + GameUiScale.Size(6f, scale), panelRect.xMax - textX - inset, choiceAreaHeight), scale);
         }
         else
         {
-            Rect continueRect = new Rect(panelRect.xMax - 196f, panelRect.yMax - 56f, 170f, 38f);
+            Rect continueRect = new Rect(panelRect.xMax - GameUiScale.Size(196f, scale), panelRect.yMax - GameUiScale.Size(56f, scale), GameUiScale.Size(170f, scale), GameUiScale.Size(38f, scale));
             string buttonLabel = string.IsNullOrEmpty(activeNode.nextNodeId) ? "Enter: Close" : "Enter: Continue";
             if (GUI.Button(continueRect, buttonLabel, buttonStyle))
             {
@@ -145,11 +154,27 @@ public class DialogueController : MonoBehaviour
         }
     }
 
-    private void DrawChoices(Rect area)
+    private void DrawDialogueText(Rect area, float scale)
     {
+        float viewWidth = Mathf.Max(1f, area.width - GameUiScale.Size(18f, scale));
+        float textHeight = Mathf.Max(area.height, bodyStyle.CalcHeight(new GUIContent(activeNode.text), viewWidth));
+        Rect viewRect = new Rect(0f, 0f, viewWidth, textHeight);
+
+        textScrollPosition = GUI.BeginScrollView(area, textScrollPosition, viewRect);
+        GUI.Label(viewRect, activeNode.text, bodyStyle);
+        GUI.EndScrollView();
+    }
+
+    private void DrawChoices(Rect area, float scale)
+    {
+        float rowHeight = GameUiScale.Size(38f, scale);
+        float buttonHeight = GameUiScale.Size(34f, scale);
+        Rect viewRect = new Rect(0f, 0f, Mathf.Max(1f, area.width - GameUiScale.Size(18f, scale)), visibleChoices.Count * rowHeight);
+        choiceScrollPosition = GUI.BeginScrollView(area, choiceScrollPosition, viewRect);
+
         for (int i = 0; i < visibleChoices.Count && i < 4; i++)
         {
-            Rect buttonRect = new Rect(area.x, area.y + (i * 38f), area.width, 34f);
+            Rect buttonRect = new Rect(0f, i * rowHeight, viewRect.width, buttonHeight);
             string label = (i + 1) + ". " + visibleChoices[i].label;
             if (GUI.Button(buttonRect, label, buttonStyle))
             {
@@ -157,6 +182,8 @@ public class DialogueController : MonoBehaviour
                 Event.current.Use();
             }
         }
+
+        GUI.EndScrollView();
     }
 
     private void HandleKeyboardInput(Event currentEvent)
@@ -228,6 +255,8 @@ public class DialogueController : MonoBehaviour
     private void SetActiveNode(DialogueNode node)
     {
         activeNode = node;
+        textScrollPosition = Vector2.zero;
+        choiceScrollPosition = Vector2.zero;
         RefreshVisibleChoices();
     }
 
@@ -271,21 +300,23 @@ public class DialogueController : MonoBehaviour
 
     private void EnsureStyles()
     {
-        if (speakerStyle != null)
+        float scale = GameUiScale.Current;
+        if (speakerStyle != null && Mathf.Approximately(styleScale, scale))
         {
             return;
         }
 
+        styleScale = scale;
         speakerStyle = new GUIStyle(GUI.skin.label)
         {
-            fontSize = 26,
+            fontSize = GameUiScale.Font(26f, scale),
             fontStyle = FontStyle.Bold,
             normal = { textColor = PixelUiSprites.Gold }
         };
 
         bodyStyle = new GUIStyle(GUI.skin.label)
         {
-            fontSize = 22,
+            fontSize = GameUiScale.Font(22f, scale),
             wordWrap = true,
             richText = false,
             normal = { textColor = new Color(0.9f, 0.88f, 1f, 1f) }
@@ -293,9 +324,9 @@ public class DialogueController : MonoBehaviour
 
         buttonStyle = new GUIStyle(GUI.skin.button)
         {
-            fontSize = 20,
+            fontSize = GameUiScale.Font(20f, scale),
             alignment = TextAnchor.MiddleLeft,
-            padding = new RectOffset(14, 14, 5, 5),
+            padding = new RectOffset(GameUiScale.Font(14f, scale), GameUiScale.Font(14f, scale), GameUiScale.Font(5f, scale), GameUiScale.Font(5f, scale)),
             normal =
             {
                 background = PixelUiSprites.TextureFor(PixelUiFrame.Button),

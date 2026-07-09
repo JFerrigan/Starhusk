@@ -234,7 +234,7 @@ public void BeginMove(PlanetResourceExtractorBuilding building)
             PlayerUpgradeState state = PlayerUpgradeState.Current;
             if (state != null)
             {
-                state.Unlock(definition.upgradeId.Value);
+                state.SetUnlocked(definition.upgradeId.Value, true);
             }
 
             return;
